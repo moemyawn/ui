@@ -3,7 +3,7 @@
     drawing-based ui lib for UNC/sUNC runtimes
 
     usage:
-        local bliss = loadstring(game:HttpGet("to be changed cause i haven't made the repo yet"))()
+        local bliss = loadstring(game:HttpGet("https://raw.githubusercontent.com/moemyawn/bliss/refs/heads/main/bliss.lua"))()
         local win = bliss.new({ Name = "bliss.lua" })
         local tab = win:AddTab({ Name = "main" })
         tab:AddToggle({ Name = "on", Callback = function(v) end })
@@ -13,14 +13,20 @@
 
 local UIS = game:GetService("UserInputService")
 local RS = game:GetService("RunService")
-local GS = game:GetService("GuiService")
+local GS = game:GetService("GuiService")--[[
+local aim = loadstring(game:HttpGet("https://raw.githubusercontent.com/moemyawn/bliss/refs/heads/main/modules/aim.lua"))()
+local esp = loadstring(game:HttpGet("https://raw.githubusercontent.com/moemyawn/bliss/refs/heads/main/modules/esp.lua"))()
+local chams = loadstring(game:HttpGet("https://raw.githubusercontent.com/moemyawn/bliss/refs/heads/main/modules/chams.lua"))()
+local pred = loadstring(game:HttpGet("https://raw.githubusercontent.com/moemyawn/bliss/refs/heads/main/modules/prediction.lua"))()
+local resolver = loadstring(game:HttpGet("https://raw.githubusercontent.com/moemyawn/bliss/refs/heads/main/modules/resolver.lua"))()
+]]
 
-local GENV = (getgenv and getgenv()) or _G
-local BLISS_GLOBAL_KEY = "__bliss_runtime__"
-local prevBliss = GENV[BLISS_GLOBAL_KEY]
-if type(prevBliss) == "table" and prevBliss.DestroyAll then
+local global = (getglobal and getglobal()) or _G
+local bliss_key = tostring(crypt.base64encode(tostring(game.PlaceId)))
+local pb = global[bliss_key]
+if type(pb) == "table" and pb.DestroyAll then
     pcall(function()
-        prevBliss:DestroyAll()
+        pb:DestroyAll()
     end)
 end
 
@@ -48,6 +54,7 @@ local pal = {
     accentDim   = Color3.fromRGB(185, 100, 112),
     accentLit   = Color3.fromRGB(255, 165, 175),
     accentSoft  = Color3.fromRGB(235, 135, 145),
+    faded       = Color3.fromRGB(235, 135, 145),
     good        = Color3.fromRGB(105, 195, 135),
     warn        = Color3.fromRGB(210, 180, 85),
     bad         = Color3.fromRGB(210, 85, 85),
@@ -60,18 +67,15 @@ local sz = {
     elemH      = 30,
     elemGap    = 5,
     pad        = 8,
-    font       = 13,
-    fontSm     = 11,
-    fontXs     = 10,
+    font       = 15,
+    fontSm     = 13,
+    fontXs     = 11,
     round      = 4,
     sliderH    = 4,
     toggleW    = 34,
     toggleH    = 16,
     colorBox   = 14,
 }
-
--- drawing constructors
--- nothing fancy, just wrappers that return the object
 
 local function setProp(obj, key, value)
     if value == nil then return end
@@ -146,15 +150,11 @@ local function newTri(p)
     return d
 end
 
--- math stuff
-
 local function clamp(v, lo, hi) return math.max(lo, math.min(hi, v)) end
 local function lerp(a, b, t) return a + (b - a) * t end
 local function lc(a, b, t) return Color3.new(lerp(a.R,b.R,t), lerp(a.G,b.G,t), lerp(a.B,b.B,t)) end
 local function hit(mx, my, x, y, w, h) return mx>=x and mx<=x+w and my>=y and my<=y+h end
 local function snap(n, s) s = s or 1; return math.floor(n/s+0.5)*s end
-
--- mouse state, polled every frame
 
 local mx, my, mDown, mClick, mScroll = 0, 0, false, false, 0
 local insetY = 0
@@ -176,7 +176,6 @@ table.insert(bliss._connections, UIS.InputBegan:Connect(function(io, gp)
         mDown = true
         mClick = true
     end
-    -- some executors report keyboard input as game-processed; keep toggle reliable
     if io.KeyCode == bliss._toggleKey then
         bliss._visible = not bliss._visible
     end
@@ -188,7 +187,6 @@ table.insert(bliss._connections, UIS.InputEnded:Connect(function(io)
     end
 end))
 
--- remove helper, safely kills a drawing
 local function kill(d)
     if not d then return end
     pcall(function()
@@ -199,13 +197,6 @@ local function kill(d)
         end
     end)
 end
-
--- each window/tab/element tracks its own drawings in a flat list
--- so cleanup is just iterate and :Remove()
-
--- ══════════════════════════════════════
---  elements
--- ══════════════════════════════════════
 
 local function mkToggle(o, flags)
     local e = {
@@ -457,70 +448,104 @@ end
 
 local function mkKeybind(o, flags)
     local e = {
-        type = "keybind", name = o.Name or "keybind",
-        val = o.Default or Enum.KeyCode.Unknown,
-        cb = o.Callback or function()end, flag = o.Flag,
-        h = sz.elemH, _listen = false, _d = {},
+        type = "keybind",
+        name = o.Name or "keybind",
+        val = typeof(o.Default) == "EnumItem" and o.Default or nil,
+        cb = typeof(o.Callback) == "function" and o.Callback or function() end,
+        flag = o.Flag,
+        h = sz.elemH,
+        _listen = false,
+        _d = {},
     }
+
     e._d.label = newLabel({ Size = sz.font, ZIndex = 30 })
     e._d.bg = newRect({ Rounding = 3, ZIndex = 28 })
     e._d.bgOut = newRect({ Filled = false, Rounding = 3, ZIndex = 28 })
     e._d.keyTxt = newLabel({ Size = sz.fontXs, Center = true, ZIndex = 30 })
 
     local kconn
-    function e:set(k) self.val = k; if self.flag and flags then flags[self.flag] = k end end
+
+    function e:set(k)
+        self.val = k
+        if self.flag and flags then
+            flags[self.flag] = k
+        end
+    end
 
     function e:draw(px, py, w, vis)
-        for _,d in pairs(self._d) do d.Visible = vis end
+        for _, d in pairs(self._d) do d.Visible = vis end
         if not vis then return end
+
         local kn = self._listen and "..." or (self.val and self.val.Name or "None")
         local kw = math.max(42, #kn * 6 + 16)
         local kh = sz.elemH - 10
         local kx = px + w - kw - 6
         local ky = py + 5
+
         local hov = hit(mx, my, kx, ky, kw, kh)
+
         if hov and mClick and not self._listen then
             self._listen = true
-            if kconn then kconn:Disconnect() end
+
+            if kconn then
+                kconn:Disconnect()
+                kconn = nil
+            end
+
             kconn = UIS.InputBegan:Connect(function(io, gp)
                 if gp then return end
                 if io.UserInputType == Enum.UserInputType.Keyboard then
-                    self.val = io.KeyCode == Enum.KeyCode.Escape and Enum.KeyCode.Unknown or io.KeyCode
+                    local key = (io.KeyCode == Enum.KeyCode.Escape) and nil or io.KeyCode
+                    self:set(key)
                     self._listen = false
-                    if self.flag and flags then flags[self.flag] = self.val end
-                    if kconn then kconn:Disconnect(); kconn = nil end
+
+                    if kconn then
+                        kconn:Disconnect()
+                        kconn = nil
+                    end
                 end
             end)
         end
+
         self._d.label.Text = self.name
         self._d.label.Position = Vector2.new(px + 8, py + (sz.elemH - sz.font)/2 - 1)
         self._d.label.Color = pal.textSub
-        self._d.bg.Position = Vector2.new(kx, ky); self._d.bg.Size = Vector2.new(kw, kh)
+
+        self._d.bg.Position = Vector2.new(kx, ky)
+        self._d.bg.Size = Vector2.new(kw, kh)
         self._d.bg.Color = self._listen and pal.press or (hov and pal.hover or pal.panel)
-        self._d.bgOut.Position = Vector2.new(kx, ky); self._d.bgOut.Size = Vector2.new(kw, kh)
+
+        self._d.bgOut.Position = Vector2.new(kx, ky)
+        self._d.bgOut.Size = Vector2.new(kw, kh)
         self._d.bgOut.Color = self._listen and pal.accent or pal.borderDim
+
         self._d.keyTxt.Text = kn
         self._d.keyTxt.Position = Vector2.new(kx + kw/2, ky + (kh - sz.fontXs)/2 - 1)
         self._d.keyTxt.Color = self._listen and pal.accent or pal.textDim
     end
 
-    -- fire callback on press
     table.insert(bliss._connections, UIS.InputBegan:Connect(function(io, gp)
         if gp or e._listen then return end
-        if io.KeyCode == e.val then e.cb() end
+        if io.UserInputType == Enum.UserInputType.Keyboard and e.val and io.KeyCode == e.val then
+            e.cb()
+        end
     end))
 
     function e:destroy()
-        for _,d in pairs(self._d) do kill(d) end
-        if kconn then kconn:Disconnect() end
+        for _, d in pairs(self._d) do kill(d) end
+        if kconn then
+            kconn:Disconnect()
+            kconn = nil
+        end
     end
+
     return e
 end
 
 local function mkTextbox(o, flags)
     local e = {
         type = "textbox", name = o.Name or "textbox",
-        val = o.Default or "", ph = o.Placeholder or "type here...",
+        val = o.Default or "", ph = o.Placeholder or "type here",
         cb = o.Callback or function()end, flag = o.Flag,
         h = sz.elemH + 6, _focus = false, _blink = 0, _d = {},
     }
@@ -720,10 +745,6 @@ local function mkColorPicker(o, flags)
     return e
 end
 
--- ══════════════════════════════════════
---  Tab
--- ══════════════════════════════════════
-
 local Tab = {}
 Tab.__index = Tab
 
@@ -736,10 +757,6 @@ function Tab:AddTextbox(o) local e = mkTextbox(o, self._win._flags); self._elems
 function Tab:AddColorPicker(o) local e = mkColorPicker(o, self._win._flags); self._elems[#self._elems+1] = e; return e end
 function Tab:AddLabel(o) local e = mkLabel(o); self._elems[#self._elems+1] = e; return e end
 function Tab:AddSeparator() local e = mkSeparator(); self._elems[#self._elems+1] = e; return e end
-
--- ══════════════════════════════════════
---  Window
--- ══════════════════════════════════════
 
 local Window = {}
 Window.__index = Window
@@ -770,10 +787,6 @@ function Window:SetTab(x)
     if type(x) == "number" then self._active = clamp(x, 1, #self._tabs)
     else for i, t in ipairs(self._tabs) do if t.name == x then self._active = i; break end end end
 end
-
--- ══════════════════════════════════════
---  render
--- ══════════════════════════════════════
 
 local function renderWin(w)
     local show = w._vis and bliss._visible
@@ -832,7 +845,6 @@ local function renderWin(w)
         td.bar.Visible = show and act
     end
 
-    -- content
     local cx = p.X + sz.tabW + 1
     local cy = p.Y + sz.titleH + 1
     local cw = ww - sz.tabW - 2
@@ -856,7 +868,6 @@ local function renderWin(w)
             ey = ey + el.h + sz.elemGap
         end
 
-        -- scrollbar
         if totalH > ch then
             local ratio = at._scroll / (totalH - ch + 14)
             local bh = math.max(20, (ch/totalH)*ch)
@@ -868,17 +879,12 @@ local function renderWin(w)
         end
     end
 
-    -- hide inactive tabs
     for i, tab in ipairs(w._tabs) do
         if i ~= w._active then
             for _, el in ipairs(tab._elems) do el:draw(0, 0, 0, false) end
         end
     end
 end
-
--- ══════════════════════════════════════
---  bliss.new — builds window chrome FIRST
--- ══════════════════════════════════════
 
 function bliss.new(opts)
     opts = opts or {}
@@ -892,8 +898,6 @@ function bliss.new(opts)
         pal.accentLit = Color3.new(math.min(1,opts.AccentColor.R*1.2), math.min(1,opts.AccentColor.G*1.2), math.min(1,opts.AccentColor.B*1.2))
     end
 
-    -- window chrome created HERE, before any elements
-    -- so elements (created in AddToggle etc) are always on top by creation order
     local d = {
         bg       = newRect({ Rounding = sz.round, ZIndex = 1 }),
         bgOut    = newRect({ Filled = false, Rounding = sz.round, ZIndex = 1 }),
@@ -920,10 +924,6 @@ function bliss.new(opts)
     bliss._windows[win._name] = win
     return win
 end
-
--- ══════════════════════════════════════
---  public api
--- ══════════════════════════════════════
 
 function bliss:UIProperties(name, visible)
     local w = self._windows[name]
@@ -961,10 +961,7 @@ function bliss:DestroyAll()
     self._connections = {}
 end
 
--- render loop
-
 table.insert(bliss._connections, RS.RenderStepped:Connect(function()
-    -- keep mouse coordinates in sync every frame for executors
     local ml = UIS:GetMouseLocation()
     mx, my = ml.X, ml.Y - insetY
     for _, w in pairs(bliss._windows) do
@@ -974,7 +971,5 @@ table.insert(bliss._connections, RS.RenderStepped:Connect(function()
     mScroll = 0
 end))
 
-GENV[BLISS_GLOBAL_KEY] = bliss
-
--- stay blissful!
+global[bliss_key] = bliss
 return bliss
