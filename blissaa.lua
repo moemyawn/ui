@@ -15,11 +15,20 @@ local UIS = game:GetService("UserInputService")
 local RS = game:GetService("RunService")
 local GS = game:GetService("GuiService")
 
+local GENV = (getgenv and getgenv()) or _G
+local BLISS_GLOBAL_KEY = "__bliss_runtime__"
+local prevBliss = GENV[BLISS_GLOBAL_KEY]
+if type(prevBliss) == "table" and prevBliss.DestroyAll then
+    pcall(function()
+        prevBliss:DestroyAll()
+    end)
+end
+
 local bliss = {}
 bliss._windows = {}
 bliss._connections = {}
 bliss._visible = true
-bliss._toggleKey = Enum.KeyCode.RightShift
+bliss._toggleKey = Enum.KeyCode.Equals
 
 -- salmon-pink, soft and warm
 local pal = {
@@ -312,6 +321,7 @@ local function mkButton(o)
         self._d.bg.Color = lc(pal.panel, pal.hover, self._ha)
         self._d.bgOut.Position = Vector2.new(bx, by); self._d.bgOut.Size = Vector2.new(bw, bh)
         self._d.bgOut.Color = lc(pal.borderDim, pal.accent, self._ha * 0.5)
+        self._d.label.Text = self.name
         self._d.label.Position = Vector2.new(bx + bw/2, by + (bh - sz.font)/2 - 1)
         self._d.label.Color = lc(pal.textSub, pal.text, self._ha)
     end
@@ -963,6 +973,8 @@ table.insert(bliss._connections, RS.RenderStepped:Connect(function()
     mClick = false
     mScroll = 0
 end))
+
+GENV[BLISS_GLOBAL_KEY] = bliss
 
 -- stay blissful!
 return bliss
