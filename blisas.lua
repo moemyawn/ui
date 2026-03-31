@@ -344,56 +344,57 @@ local function updateNotifications(dt)
     while i >= 1 do
         local n = bliss._notifications[i]
         n._life = n._life + dt
+        local dead = false
         if n._life > n.duration then
             n._fadeOut = (n._fadeOut or 0) + dt * 4
             if n._fadeOut >= 1 then
                 for _, d in pairs(n._d) do kill(d) end
                 table.remove(bliss._notifications, i)
-                i = i - 1
-                goto continue
+                dead = true
             end
         end
-        local fadeIn = clamp(n._life * 5, 0, 1)
-        local fadeOut = 1 - (n._fadeOut or 0)
-        local alpha = fadeIn * fadeOut
-        local ny = baseY - (sz.notifH + 6) * (#bliss._notifications - i + 1)
-        local nx = screenW - sz.notifW - 16
-        n._posY = lerp(n._posY or (ny + 20), ny, 0.15)
-        local accentCol = n.color or pal.accent
-        n._d.bg.Visible = bliss._visible
-        n._d.bg.Position = Vector2.new(nx, n._posY)
-        n._d.bg.Size = Vector2.new(sz.notifW, sz.notifH)
-        n._d.bg.Color = pal.panel
-        n._d.bg.Transparency = (1 - alpha) * 0.5
-        n._d.bg.Rounding = sz.roundSm
-        n._d.bgOut.Visible = bliss._visible
-        n._d.bgOut.Position = Vector2.new(nx, n._posY)
-        n._d.bgOut.Size = Vector2.new(sz.notifW, sz.notifH)
-        n._d.bgOut.Color = lc(pal.borderDim, accentCol, 0.3)
-        n._d.bgOut.Rounding = sz.roundSm
-        n._d.bar.Visible = bliss._visible
-        n._d.bar.Position = Vector2.new(nx + 4, n._posY + 4)
-        n._d.bar.Size = Vector2.new(3, sz.notifH - 8)
-        n._d.bar.Color = accentCol
-        n._d.bar.Rounding = 2
-        n._d.title.Visible = bliss._visible
-        n._d.title.Position = Vector2.new(nx + 14, n._posY + 8)
-        n._d.title.Text = n.title
-        n._d.title.Color = pal.text
-        n._d.title.Transparency = 1 - alpha
-        n._d.msg.Visible = bliss._visible
-        n._d.msg.Position = Vector2.new(nx + 14, n._posY + 26)
-        n._d.msg.Text = n.message
-        n._d.msg.Color = pal.textSub
-        n._d.msg.Transparency = 1 - alpha
-        local progW = sz.notifW - 8
-        local progPct = clamp(n._life / n.duration, 0, 1)
-        n._d.prog.Visible = bliss._visible
-        n._d.prog.Position = Vector2.new(nx + 4, n._posY + sz.notifH - 5)
-        n._d.prog.Size = Vector2.new(progW * (1 - progPct), 2)
-        n._d.prog.Color = accentCol
-        n._d.prog.Rounding = 1
-        ::continue::
+        if not dead then
+            local fadeIn = clamp(n._life * 5, 0, 1)
+            local fadeOut = 1 - (n._fadeOut or 0)
+            local alpha = fadeIn * fadeOut
+            local ny = baseY - (sz.notifH + 6) * (#bliss._notifications - i + 1)
+            local nx = screenW - sz.notifW - 16
+            n._posY = lerp(n._posY or (ny + 20), ny, 0.15)
+            local accentCol = n.color or pal.accent
+            n._d.bg.Visible = bliss._visible
+            n._d.bg.Position = Vector2.new(nx, n._posY)
+            n._d.bg.Size = Vector2.new(sz.notifW, sz.notifH)
+            n._d.bg.Color = pal.panel
+            n._d.bg.Transparency = (1 - alpha) * 0.5
+            n._d.bg.Rounding = sz.roundSm
+            n._d.bgOut.Visible = bliss._visible
+            n._d.bgOut.Position = Vector2.new(nx, n._posY)
+            n._d.bgOut.Size = Vector2.new(sz.notifW, sz.notifH)
+            n._d.bgOut.Color = lc(pal.borderDim, accentCol, 0.3)
+            n._d.bgOut.Rounding = sz.roundSm
+            n._d.bar.Visible = bliss._visible
+            n._d.bar.Position = Vector2.new(nx + 4, n._posY + 4)
+            n._d.bar.Size = Vector2.new(3, sz.notifH - 8)
+            n._d.bar.Color = accentCol
+            n._d.bar.Rounding = 2
+            n._d.title.Visible = bliss._visible
+            n._d.title.Position = Vector2.new(nx + 14, n._posY + 8)
+            n._d.title.Text = n.title
+            n._d.title.Color = pal.text
+            n._d.title.Transparency = 1 - alpha
+            n._d.msg.Visible = bliss._visible
+            n._d.msg.Position = Vector2.new(nx + 14, n._posY + 26)
+            n._d.msg.Text = n.message
+            n._d.msg.Color = pal.textSub
+            n._d.msg.Transparency = 1 - alpha
+            local progW = sz.notifW - 8
+            local progPct = clamp(n._life / n.duration, 0, 1)
+            n._d.prog.Visible = bliss._visible
+            n._d.prog.Position = Vector2.new(nx + 4, n._posY + sz.notifH - 5)
+            n._d.prog.Size = Vector2.new(progW * (1 - progPct), 2)
+            n._d.prog.Color = accentCol
+            n._d.prog.Rounding = 1
+        end
         i = i - 1
     end
 end
