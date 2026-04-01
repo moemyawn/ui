@@ -36,7 +36,6 @@ bliss._connections = {}
 bliss._visible = true
 bliss._toggleKey = Enum.KeyCode.Equals
 
--- salmon-pink, soft and warm
 local pal = {
     bg          = Color3.fromRGB(18, 17, 20),
     bgDeep      = Color3.fromRGB(13, 12, 15),
@@ -204,7 +203,6 @@ local function mkToggle(o, flags)
         val = o.Default or false, cb = o.Callback or function()end,
         flag = o.Flag, h = sz.elemH, _a = 0, _d = {},
     }
-    -- drawings created here, AFTER window chrome exists
     e._d.label = newLabel({ Size = sz.font, ZIndex = 30 })
     e._d.bg = newRect({ Rounding = 3, ZIndex = 28 })
     e._d.bgOut = newRect({ Filled = false, Rounding = 3, ZIndex = 28 })
@@ -608,7 +606,6 @@ local function mkTextbox(o, flags)
         end
     end
 
-    -- char input
     table.insert(bliss._connections, UIS.InputBegan:Connect(function(io, gp)
         if not e._focus or gp then return end
         local shift = UIS:IsKeyDown(Enum.KeyCode.LeftShift) or UIS:IsKeyDown(Enum.KeyCode.RightShift)
@@ -647,7 +644,7 @@ local function mkColorPicker(o, flags)
         h = sz.elemH, _open = false, _dSV = false, _dH = false,
         _hue = 0, _sat = 1, _bri = 1, _d = {},
     }
-    -- init hsv from default
+    
     do
         local r,g,b = e.val.R, e.val.G, e.val.B
         local hi,lo = math.max(r,g,b), math.min(r,g,b)
@@ -768,7 +765,6 @@ function Window:AddTab(o)
         _elems = {}, _scroll = 0, _win = self,
     }, Tab)
 
-    -- tab button drawings, created AFTER window chrome
     local td = {
         bg = newRect({ Rounding = 3, ZIndex = 8 }),
         icon = newLabel({ Size = sz.fontSm, Center = true, ZIndex = 9 }),
@@ -793,7 +789,6 @@ local function renderWin(w)
     local p = w._pos
     local ww, wh = w._sz.X, w._sz.Y
 
-    -- drag
     if hit(mx, my, p.X, p.Y, ww, sz.titleH) and mClick and not w._drag then
         w._drag = true; w._dOff = Vector2.new(mx - p.X, my - p.Y)
     end
@@ -803,7 +798,6 @@ local function renderWin(w)
         p = w._pos
     end
 
-    -- window chrome
     local d = w._draw
     for _, obj in pairs(d) do obj.Visible = show end
     if not show then
@@ -822,7 +816,6 @@ local function renderWin(w)
     d.side.Position = Vector2.new(p.X, p.Y + sz.titleH); d.side.Size = Vector2.new(sz.tabW, wh - sz.titleH); d.side.Color = pal.bgDeep
     d.sideDiv.From = Vector2.new(p.X + sz.tabW, p.Y + sz.titleH); d.sideDiv.To = Vector2.new(p.X + sz.tabW, p.Y + wh)
 
-    -- tabs
     local sideY = p.Y + sz.titleH
     for i, td in ipairs(w._tabDraw) do
         local act = (i == w._active)
