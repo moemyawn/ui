@@ -1601,8 +1601,12 @@ table.insert(bliss._connections, RS.RenderStepped:Connect(function()
     mx, my = ml.X, ml.Y - insetY
 
     local cam = workspace.CurrentCamera
+
     if not bliss._loadDone then
         updateLoadScreen(dt, cam)
+        mClick  = false
+        mScroll = 0
+        return
     end
 
     bliss._tooltipText = nil
