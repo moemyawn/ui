@@ -345,30 +345,36 @@ end
 
 local function mkGlowBorder(zBase)
     return {
-        g1 = newRect({ Filled = false, Rounding = sz.round + 3, ZIndex = zBase - 1 }),
-        g2 = newRect({ Filled = false, Rounding = sz.round + 6, ZIndex = zBase - 2 }),
-        g3 = newRect({ Filled = false, Rounding = sz.round + 10, ZIndex = zBase - 3 }),
+        g1 = newRect({ Filled = false, Rounding = sz.round + 1,  ZIndex = zBase - 1, Thickness = 3 }),
+        g2 = newRect({ Filled = false, Rounding = sz.round + 3,  ZIndex = zBase - 2, Thickness = 2 }),
+        g3 = newRect({ Filled = false, Rounding = sz.round + 6,  ZIndex = zBase - 3, Thickness = 2 }),
+        g4 = newRect({ Filled = false, Rounding = sz.round + 10, ZIndex = zBase - 4, Thickness = 1 }),
+        g5 = newRect({ Filled = false, Rounding = sz.round + 15, ZIndex = zBase - 5, Thickness = 1 }),
     }
 end
 
 local function drawGlowBorder(g, px, py, ww, wh, col, strength)
     local s = strength or 0.18
-    local pads = {2, 5, 9}
-    local alphas = {s, s*0.5, s*0.22}
-    local gs = {g.g1, g.g2, g.g3}
-    for i = 1, 3 do
-        local pad = pads[i]
-        gs[i].Visible   = true
-        gs[i].Position  = Vector2.new(px - pad, py - pad)
-        gs[i].Size      = Vector2.new(ww + pad*2, wh + pad*2)
-        gs[i].Color     = col
-        gs[i].Thickness = 1
-        gs[i].Transparency = alphas[i]
+    local layers = {
+        { g.g1, 1,  s * 0.92 },
+        { g.g2, 4,  s * 0.65 },
+        { g.g3, 8,  s * 0.40 },
+        { g.g4, 13, s * 0.20 },
+        { g.g5, 19, s * 0.08 },
+    }
+    for _, layer in ipairs(layers) do
+        local d, pad, alpha = layer[1], layer[2], layer[3]
+        d.Visible   = true
+        d.Position  = Vector2.new(px - pad, py - pad)
+        d.Size      = Vector2.new(ww + pad*2, wh + pad*2)
+        d.Color     = col
+        d.Transparency = math.max(0, math.min(1, alpha))
     end
 end
 
 local function hideGlowBorder(g)
     g.g1.Visible = false; g.g2.Visible = false; g.g3.Visible = false
+    g.g4.Visible = false; g.g5.Visible = false
 end
 
 local function kill(d)
@@ -930,106 +936,215 @@ local function mkKeybind(o, flags)
 end
 
 local function mkTextbox(o, flags)
+    local labelH = sz.font + 4
+    local boxH   = 20
     local e = {
         type = "textbox", name = o.Name or "textbox",
         val = o.Default or "", ph = o.Placeholder or "type here",
         cb = typeof(o.Callback) == "function" and o.Callback or function() end,
         flag = o.Flag, tooltip = o.Tooltip,
-        h = sz.elemH + 6, _focus = false, _blink = 0, _focusA = 0, _d = {},
+        h = labelH + boxH + 8,
+        _focus = false, _blinkT = 0, _blinkOn = true, _focusA = 0, _d = {},
+        _repeatKey = nil, _repeatTimer = 0, _repeatDelay = 0,
     }
     e._d.label  = newLabel({ Size = sz.font, ZIndex = 30 })
     e._d.bg     = newRect({ Rounding = 3, ZIndex = 28 })
     e._d.bgOut  = newRect({ Filled = false, Rounding = 3, ZIndex = 28 })
-    e._d.glow   = newRect({ Filled = false, Rounding = 5, ZIndex = 27 })
+    e._d.glow1  = newRect({ Filled = false, Rounding = 5, ZIndex = 27 })
+    e._d.glow2  = newRect({ Filled = false, Rounding = 7, ZIndex = 26 })
     e._d.txt    = newLabel({ Size = sz.fontSm, ZIndex = 30 })
-    e._d.cur    = newLine({ Color = pal.accent, ZIndex = 31 })
+    e._d.cur    = newRect({ Rounding = 1, ZIndex = 31 })
 
-    local cconn
     function e:set(v) self.val = v; self.cb(v); if self.flag and flags then flags[self.flag] = v end end
 
-    function e:draw(px, py, w, vis)
+    local function charFromKey(kc, shift)
+        local n = kc.Name
+        if kc == Enum.KeyCode.Space then return " " end
+        if kc == Enum.KeyCode.Backspace or kc == Enum.KeyCode.Return or kc == Enum.KeyCode.Escape then return nil end
+        if n and #n == 1 and n:match("%a") then return shift and n:upper() or n:lower() end
+        if n and #n == 1 and n:match("%d") then
+            local sm = {["1"]="!",["2"]="@",["3"]="#",["4"]="$",["5"]="%",["6"]="^",["7"]="&",["8"]="*",["9"]="(",["0"]=")"}
+            return shift and (sm[n] or n) or n
+        end
+        local specials = {
+            [Enum.KeyCode.Period]       = {".",">"}, [Enum.KeyCode.Comma]        = {",","<"},
+            [Enum.KeyCode.Minus]        = {"-","_"}, [Enum.KeyCode.Equals]       = {"=","+"},
+            [Enum.KeyCode.Slash]        = {"/","?"}, [Enum.KeyCode.Semicolon]    = {";",":"},
+            [Enum.KeyCode.Quote]        = {"'",'"'}, [Enum.KeyCode.LeftBracket]  = {"[","{"},
+            [Enum.KeyCode.RightBracket] = {"]","}"}, [Enum.KeyCode.BackSlash]    = {"\\","|"},
+            [Enum.KeyCode.Backquote]    = {"`","~"},
+        }
+        local s = specials[kc]
+        if s then return shift and s[2] or s[1] end
+        return nil
+    end
+
+    local function applyKey(kc)
+        local shift = UIS:IsKeyDown(Enum.KeyCode.LeftShift) or UIS:IsKeyDown(Enum.KeyCode.RightShift)
+        if kc == Enum.KeyCode.Backspace then
+            if #e.val > 0 then e.val = e.val:sub(1, -2) end
+        else
+            local ch = charFromKey(kc, shift)
+            if ch then e.val = e.val .. ch end
+        end
+    end
+
+    local iconn, econn
+    local function openFocus()
+        if iconn then iconn:Disconnect(); iconn = nil end
+        if econn then econn:Disconnect(); econn = nil end
+        e._repeatKey   = nil
+        e._repeatTimer = 0
+        e._repeatDelay = 0
+        bliss._textFocused = true
+
+        iconn = UIS.InputBegan:Connect(function(io, gp)
+            if not e._focus then return end
+            if gp then return end
+            if io.UserInputType ~= Enum.UserInputType.Keyboard then return end
+            if io.KeyCode == Enum.KeyCode.Return then
+                e._focus = false
+                bliss._textFocused = false
+                e.cb(e.val)
+                if e.flag and flags then flags[e.flag] = e.val end
+                if iconn then iconn:Disconnect(); iconn = nil end
+                if econn then econn:Disconnect(); econn = nil end
+                e._repeatKey = nil
+                return
+            end
+            if io.KeyCode == Enum.KeyCode.Escape then
+                e._focus = false
+                bliss._textFocused = false
+                if iconn then iconn:Disconnect(); iconn = nil end
+                if econn then econn:Disconnect(); econn = nil end
+                e._repeatKey = nil
+                return
+            end
+            applyKey(io.KeyCode)
+            e._repeatKey   = io.KeyCode
+            e._repeatTimer = 0
+            e._repeatDelay = 0.5
+        end)
+
+        econn = UIS.InputEnded:Connect(function(io)
+            if io.UserInputType == Enum.UserInputType.Keyboard and io.KeyCode == e._repeatKey then
+                e._repeatKey = nil
+            end
+        end)
+    end
+
+    local function closeFocus()
+        bliss._textFocused = false
+        e.cb(e.val)
+        if e.flag and flags then flags[e.flag] = e.val end
+        if iconn then iconn:Disconnect(); iconn = nil end
+        if econn then econn:Disconnect(); econn = nil end
+        e._repeatKey = nil
+    end
+
+    local _dt = 0
+    function e:draw(px, py, w, vis, frameDt)
         for _, d in pairs(self._d) do d.Visible = vis end
         if not vis then return end
+
         local bw = w - 14
-        local bh = 20
         local bx = px + 7
-        local by = py + sz.elemH - bh + 3
-        local hov = hit(mx, my, bx, by, bw, bh)
+        local by = py + labelH + 4
+        local hov = hit(mx, my, bx, by, bw, boxH)
+
         if mClick then
             local was = self._focus
             self._focus = hov
             if self._focus and not was then
-                if cconn then cconn:Disconnect() end
-                cconn = UIS.InputBegan:Connect(function(io)
-                    if not self._focus then return end
-                    if io.KeyCode == Enum.KeyCode.Backspace then
-                        if #self.val > 0 then self.val = self.val:sub(1, -2) end
-                    elseif io.KeyCode == Enum.KeyCode.Return then
-                        self._focus = false; self.cb(self.val)
-                        if self.flag and flags then flags[self.flag] = self.val end
-                        if cconn then cconn:Disconnect(); cconn = nil end
-                    elseif io.KeyCode == Enum.KeyCode.Escape then
-                        self._focus = false
-                        if cconn then cconn:Disconnect(); cconn = nil end
-                    end
-                end)
+                openFocus()
             elseif was and not self._focus then
-                self.cb(self.val)
-                if self.flag and flags then flags[self.flag] = self.val end
-                if cconn then cconn:Disconnect(); cconn = nil end
+                closeFocus()
             end
         end
+
+        local fdt = frameDt or (1/60)
+        if e._repeatKey then
+            e._repeatTimer = e._repeatTimer + fdt
+            if e._repeatDelay > 0 then
+                if e._repeatTimer >= e._repeatDelay then
+                    e._repeatDelay = 0
+                    e._repeatTimer = 0
+                end
+            else
+                if e._repeatTimer >= 0.05 then
+                    applyKey(e._repeatKey)
+                    e._repeatTimer = 0
+                end
+            end
+        end
+
+        if self._focus then
+            self._blinkT = self._blinkT + fdt
+            if self._blinkT >= 0.53 then self._blinkT = 0; self._blinkOn = not self._blinkOn end
+        end
+
         self._focusA = lerp(self._focusA, self._focus and 1 or 0, 0.15)
+
         self._d.label.Text     = self.name
         self._d.label.Position = Vector2.new(px + 8, py + 2)
-        self._d.bg.Position    = Vector2.new(bx, by); self._d.bg.Size = Vector2.new(bw, bh); self._d.bg.Color = pal.bgDeep
-        self._d.bgOut.Position = Vector2.new(bx, by); self._d.bgOut.Size = Vector2.new(bw, bh)
+        self._d.label.Color    = self._focus and pal.text or pal.textSub
+
+        self._d.bg.Position    = Vector2.new(bx, by)
+        self._d.bg.Size        = Vector2.new(bw, boxH)
+        self._d.bg.Color       = pal.bgDeep
+
+        self._d.bgOut.Position = Vector2.new(bx, by)
+        self._d.bgOut.Size     = Vector2.new(bw, boxH)
         self._d.bgOut.Color    = lc(hov and pal.borderLit or pal.borderDim, pal.accent, self._focusA)
-        self._d.glow.Position  = Vector2.new(bx - 3, by - 3); self._d.glow.Size = Vector2.new(bw + 6, bh + 6)
-        self._d.glow.Color     = pal.accent; self._d.glow.Thickness = 1
-        self._d.glow.Transparency = math.max(0, 1 - self._focusA * 0.65)
-        local dt = #self.val > 0 and self.val or self.ph
-        self._d.txt.Text       = dt; self._d.txt.Position = Vector2.new(bx + 6, by + (bh - sz.fontSm)/2 - 1)
-        self._d.txt.Color      = #self.val > 0 and pal.text or pal.textDim
+
+        local ga = self._focusA
+        self._d.glow1.Position     = Vector2.new(bx - 3, by - 3)
+        self._d.glow1.Size         = Vector2.new(bw + 6, boxH + 6)
+        self._d.glow1.Color        = pal.accent
+        self._d.glow1.Thickness    = 2
+        self._d.glow1.Transparency = math.max(0, ga * 0.55)
+
+        self._d.glow2.Position     = Vector2.new(bx - 6, by - 6)
+        self._d.glow2.Size         = Vector2.new(bw + 12, boxH + 12)
+        self._d.glow2.Color        = pal.accent
+        self._d.glow2.Thickness    = 1
+        self._d.glow2.Transparency = math.max(0, ga * 0.25)
+
+        local display = #self.val > 0 and self.val or self.ph
+        local charW   = 5.8
+        local maxChars = math.floor((bw - 12) / charW)
+        local showStr  = display
+        if #self.val > maxChars then
+            showStr = self.val:sub(#self.val - maxChars + 1)
+        elseif #self.val == 0 then
+            showStr = self.ph
+        end
+
+        self._d.txt.Text     = showStr
+        self._d.txt.Position = Vector2.new(bx + 6, by + (boxH - sz.fontSm)/2 - 1)
+        self._d.txt.Color    = #self.val > 0 and pal.text or pal.textDim
+
         if self._focus then
-            self._blink = (self._blink + 1) % 60
-            self._d.cur.Visible = self._blink < 35
-            local cx = bx + 6 + #self.val * 5.8
-            self._d.cur.From   = Vector2.new(cx, by + 3); self._d.cur.To = Vector2.new(cx, by + bh - 3)
+            local visLen = math.min(#self.val, maxChars)
+            local curX = bx + 6 + visLen * charW + 1
+            self._d.cur.Visible     = self._blinkOn
+            self._d.cur.Position    = Vector2.new(curX, by + 4)
+            self._d.cur.Size        = Vector2.new(1, boxH - 8)
+            self._d.cur.Color       = pal.accent
+            self._d.cur.Transparency = 1
         else
             self._d.cur.Visible = false
         end
+
         if hov and self.tooltip then
             bliss._tooltipText = self.tooltip; bliss._tooltipMx = mx; bliss._tooltipMy = my
         end
     end
 
-    table.insert(bliss._connections, UIS.InputBegan:Connect(function(io, gp)
-        if not e._focus or gp then return end
-        local shift = UIS:IsKeyDown(Enum.KeyCode.LeftShift) or UIS:IsKeyDown(Enum.KeyCode.RightShift)
-        local n = io.KeyCode.Name
-        if io.KeyCode == Enum.KeyCode.Space then e.val = e.val .. " "
-        elseif n and #n == 1 and n:match("%a") then e.val = e.val .. (shift and n:upper() or n:lower())
-        elseif n and #n == 1 and n:match("%d") then
-            local sm = {["1"]="!",["2"]="@",["3"]="#",["4"]="$",["5"]="%",["6"]="^",["7"]="&",["8"]="*",["9"]="(",["0"]=")"}
-            e.val = e.val .. (shift and (sm[n] or n) or n)
-        elseif io.KeyCode == Enum.KeyCode.Period then e.val = e.val .. (shift and ">" or ".")
-        elseif io.KeyCode == Enum.KeyCode.Comma then e.val = e.val .. (shift and "<" or ",")
-        elseif io.KeyCode == Enum.KeyCode.Minus then e.val = e.val .. (shift and "_" or "-")
-        elseif io.KeyCode == Enum.KeyCode.Equals then e.val = e.val .. (shift and "+" or "=")
-        elseif io.KeyCode == Enum.KeyCode.Slash then e.val = e.val .. (shift and "?" or "/")
-        elseif io.KeyCode == Enum.KeyCode.Semicolon then e.val = e.val .. (shift and ":" or ";")
-        elseif io.KeyCode == Enum.KeyCode.Quote then e.val = e.val .. (shift and '"' or "'")
-        elseif io.KeyCode == Enum.KeyCode.LeftBracket then e.val = e.val .. (shift and "{" or "[")
-        elseif io.KeyCode == Enum.KeyCode.RightBracket then e.val = e.val .. (shift and "}" or "]")
-        elseif io.KeyCode == Enum.KeyCode.BackSlash then e.val = e.val .. (shift and "|" or "\\")
-        elseif io.KeyCode == Enum.KeyCode.Backquote then e.val = e.val .. (shift and "~" or "`")
-        end
-    end))
-
     function e:destroy()
         for _, d in pairs(self._d) do kill(d) end
-        if cconn then cconn:Disconnect() end
+        if iconn then iconn:Disconnect() end
+        if econn then econn:Disconnect() end
     end
     return e
 end
@@ -1404,9 +1519,28 @@ local function renderWin(w, dt)
         at._scroll = clamp(at._scroll, 0, math.max(0, totalH - ch + 14))
 
         local ey = cy + sz.pad - at._scroll
+        local fadeStart = cy + ch * 0.55
+        local fadeEnd   = cy + ch
         for _, el in ipairs(at._elems) do
-            local eVis = alpha > 0.05 and (ey + el.h > cy) and (ey < cy + ch)
-            el:draw(cx + 4, ey, cw - 12, eVis and true or false)
+            local eTop = ey
+            local eBot = ey + el.h
+            local eVis = alpha > 0.05 and (eBot > cy) and (eTop < cy + ch)
+            local elemAlpha = 1
+            if eVis and eBot > fadeStart then
+                local frac = clamp((eTop - fadeStart) / (fadeEnd - fadeStart), 0, 1)
+                elemAlpha = 1 - frac
+                if elemAlpha < 0.04 then eVis = false end
+            end
+            if eVis then
+                el:draw(cx + 4, ey, cw - 12, true, dt)
+                for _, d in pairs(el._d or {}) do
+                    if elemAlpha < 0.99 then
+                        pcall(function() d.Transparency = math.max(d.Transparency or 1, elemAlpha) end)
+                    end
+                end
+            else
+                el:draw(cx + 4, ey, cw - 12, false, dt)
+            end
             ey = ey + el.h + sz.elemGap
         end
 
@@ -1448,7 +1582,7 @@ function bliss.new(opts)
         titleDiv   = newLine({ Color = pal.borderDim, ZIndex = 3 }),
         dot        = newDot({ Color = pal.accent, Radius = 3, NumSides = 16, ZIndex = 4 }),
         name       = newLabel({ Color = pal.text, Size = sz.font, ZIndex = 4 }),
-        slogan     = newLabel({ Text = "stay blissful!", Color = pal.textDim, Size = sz.fontXs, Font = 3, ZIndex = 4 }),
+        slogan     = newLabel({ Text = "stay blissful!  ", Color = pal.textDim, Size = sz.fontXs, Font = 5, ZIndex = 4 }),
         side       = newRect({ ZIndex = 2 }),
         sideDiv    = newLine({ Color = pal.borderDim, ZIndex = 3 }),
         contentDiv = newLine({ Color = pal.borderDim, ZIndex = 3, Transparency = 0.5 }),
@@ -1556,7 +1690,7 @@ function bliss:Destroy(name)
     for _, d in pairs(w._draw) do kill(d) end
     for _, td in ipairs(w._tabDraw) do for k, d in pairs(td) do if type(d) ~= "number" then kill(d) end end end
     for _, g in pairs(w._glow) do
-        kill(g.g1); kill(g.g2); kill(g.g3)
+        kill(g.g1); kill(g.g2); kill(g.g3); kill(g.g4); kill(g.g5)
     end
     self._windows[name] = nil
 end
@@ -1578,11 +1712,13 @@ table.insert(bliss._connections, UIS.InputChanged:Connect(function(io)
     end
 end))
 
+bliss._textFocused = false
+
 table.insert(bliss._connections, UIS.InputBegan:Connect(function(io, gp)
     if io.UserInputType == Enum.UserInputType.MouseButton1 then
         mDown = true; mClick = true
     end
-    if not gp and io.KeyCode == bliss._toggleKey then
+    if not gp and not bliss._textFocused and io.KeyCode == bliss._toggleKey then
         bliss._visible = not bliss._visible
     end
 end))
