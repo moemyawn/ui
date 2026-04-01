@@ -221,116 +221,125 @@ local function ensureLoadScreen()
         glowL3 = newRect({ ZIndex = 996, Rounding = 16, Filled = true }),
     }
 end
-local _loadT  = 0
+local _loadT       = 0
 local _loadDismiss = false
+local _loadReady   = false
+local _loadFading  = false
+local _loadFadeT   = 0
 
 local function updateLoadScreen(dt, cam)
     ensureLoadScreen()
     _loadT = _loadT + dt
-    local animDone = _loadT >= 1.25
-    if _loadDismiss and animDone then
-        for _, d in pairs(_loadScreen) do d.Visible = false end
-        return
-    end
+
+    local minDuration = 2.25
+    local fadeInDur   = 0.45
+    local animDone    = _loadT >= minDuration
+
     local vp = cam.ViewportSize
     local cx, cy = vp.X/2, vp.Y/2
     local pw, ph = 260, 110
 
-    local slideIn = math.min(1, _loadT / 0.35)
-    slideIn = easeOut(slideIn)
-    local fadeIn = math.min(1, _loadT / 0.5)
+    local slideIn = easeOut(math.min(1, _loadT / 0.35))
+    local fadeIn  = math.min(1, _loadT / fadeInDur)
+
+    if fadeIn >= 1 and not _loadReady then
+        _loadReady = true
+    end
+
+    if _loadFading then
+        _loadFadeT = _loadFadeT + dt
+        local t = math.min(1, _loadFadeT / 0.55)
+        local inv = 1 - easeInOut(t)
+        for _, d in pairs(_loadScreen) do
+            pcall(function() d.Transparency = inv; d.Visible = inv > 0.01 end)
+        end
+        if t >= 1 then
+            for _, d in pairs(_loadScreen) do d.Visible = false end
+            bliss._loadDone = true
+        end
+        return
+    end
+
+    if animDone and _loadDismiss and not _loadFading then
+        _loadFading = true
+        _loadFadeT  = 0
+        return
+    end
 
     local panY = cy - ph/2 + (1 - slideIn) * 30
 
-    _loadScreen.bg.Visible    = true
-    _loadScreen.bg.Position   = Vector2.new(0, 0)
-    _loadScreen.bg.Size       = Vector2.new(vp.X, vp.Y)
-    _loadScreen.bg.Color      = pal.bgDeep
+    _loadScreen.bg.Visible      = true
+    _loadScreen.bg.Position     = Vector2.new(0, 0)
+    _loadScreen.bg.Size         = Vector2.new(vp.X, vp.Y)
+    _loadScreen.bg.Color        = pal.bgDeep
     _loadScreen.bg.Transparency = fadeIn
 
     local glowA = math.abs(math.sin(_loadT * 1.4)) * 0.08
     local glowC = pal.accent
     _loadScreen.glowL3.Visible = true; _loadScreen.glowL2.Visible = true; _loadScreen.glowL1.Visible = true
     local function setGlow(g, pad, alpha)
-        g.Position = Vector2.new(cx - pw/2 - pad, panY - pad)
-        g.Size     = Vector2.new(pw + pad*2, ph + pad*2)
-        g.Color    = glowC
+        g.Position     = Vector2.new(cx - pw/2 - pad, panY - pad)
+        g.Size         = Vector2.new(pw + pad*2, ph + pad*2)
+        g.Color        = glowC
         g.Transparency = alpha * slideIn
     end
     setGlow(_loadScreen.glowL3, 14, glowA * 0.3)
     setGlow(_loadScreen.glowL2, 8,  glowA * 0.55)
     setGlow(_loadScreen.glowL1, 3,  glowA * 0.8)
 
-    _loadScreen.panel.Visible    = true
-    _loadScreen.panel.Position   = Vector2.new(cx - pw/2, panY)
-    _loadScreen.panel.Size       = Vector2.new(pw, ph)
-    _loadScreen.panel.Color      = pal.panel
+    _loadScreen.panel.Visible      = true
+    _loadScreen.panel.Position     = Vector2.new(cx - pw/2, panY)
+    _loadScreen.panel.Size         = Vector2.new(pw, ph)
+    _loadScreen.panel.Color        = pal.panel
     _loadScreen.panel.Transparency = slideIn
 
-    _loadScreen.panOut.Visible   = true
-    _loadScreen.panOut.Position  = Vector2.new(cx - pw/2, panY)
-    _loadScreen.panOut.Size      = Vector2.new(pw, ph)
-    _loadScreen.panOut.Color     = pal.border
+    _loadScreen.panOut.Visible      = true
+    _loadScreen.panOut.Position     = Vector2.new(cx - pw/2, panY)
+    _loadScreen.panOut.Size         = Vector2.new(pw, ph)
+    _loadScreen.panOut.Color        = pal.border
     _loadScreen.panOut.Transparency = slideIn
 
-    _loadScreen.txt.Visible   = slideIn > 0.5
-    _loadScreen.txt.Text      = "bliss"
-    _loadScreen.txt.Center    = true
-    _loadScreen.txt.Position  = Vector2.new(cx, panY + 18)
-    _loadScreen.txt.Color     = pal.text
+    _loadScreen.txt.Visible      = slideIn > 0.5
+    _loadScreen.txt.Text         = "bliss"
+    _loadScreen.txt.Center       = true
+    _loadScreen.txt.Position     = Vector2.new(cx, panY + 18)
+    _loadScreen.txt.Color        = pal.text
     _loadScreen.txt.Transparency = math.min(1, (slideIn - 0.5) * 2)
 
-    _loadScreen.sub.Visible   = slideIn > 0.6
-    _loadScreen.sub.Text      = "stay blissful!"
-    _loadScreen.sub.Center    = true
-    _loadScreen.sub.Position  = Vector2.new(cx, panY + 34)
-    _loadScreen.sub.Color     = pal.textDim
+    _loadScreen.sub.Visible      = slideIn > 0.6
+    _loadScreen.sub.Text         = "stay blissful!"
+    _loadScreen.sub.Center       = true
+    _loadScreen.sub.Position     = Vector2.new(cx, panY + 34)
+    _loadScreen.sub.Color        = pal.textDim
     _loadScreen.sub.Transparency = math.min(1, (slideIn - 0.6) * 2.5)
 
     local barW = pw - 40
     local barX = cx - barW/2
     local barY = panY + 58
-    local prog = animDone and 1 or math.min(1, _loadT / 1.1)
-    prog = easeInOut(prog)
+    local prog = easeInOut(math.min(1, _loadT / (minDuration * 0.9)))
 
-    _loadScreen.barBg.Visible   = slideIn > 0.4
-    _loadScreen.barBg.Position  = Vector2.new(barX, barY)
-    _loadScreen.barBg.Size      = Vector2.new(barW, 4)
-    _loadScreen.barBg.Color     = pal.borderDim
-    _loadScreen.barBg.Rounding  = 2
+    _loadScreen.barBg.Visible      = slideIn > 0.4
+    _loadScreen.barBg.Position     = Vector2.new(barX, barY)
+    _loadScreen.barBg.Size         = Vector2.new(barW, 4)
+    _loadScreen.barBg.Color        = pal.borderDim
+    _loadScreen.barBg.Rounding     = 2
     _loadScreen.barBg.Transparency = math.min(1, (slideIn - 0.4) * 1.7)
 
-    _loadScreen.bar.Visible    = slideIn > 0.4
-    _loadScreen.bar.Position   = Vector2.new(barX, barY)
-    _loadScreen.bar.Size       = Vector2.new(math.max(4, barW * prog), 4)
-    _loadScreen.bar.Color      = pal.accent
-    _loadScreen.bar.Rounding   = 2
+    _loadScreen.bar.Visible      = slideIn > 0.4
+    _loadScreen.bar.Position     = Vector2.new(barX, barY)
+    _loadScreen.bar.Size         = Vector2.new(math.max(4, barW * prog), 4)
+    _loadScreen.bar.Color        = pal.accent
+    _loadScreen.bar.Rounding     = 2
     _loadScreen.bar.Transparency = math.min(1, (slideIn - 0.4) * 1.7)
 
-    local dotY   = panY + 80
-    local beat   = math.sin(_loadT * 4)
-    local dOff   = { -18, 0, 18 }
-    local dots   = { _loadScreen.dot1, _loadScreen.dot2, _loadScreen.dot3 }
+    local dotY = panY + 80
+    local dOff = { -18, 0, 18 }
+    local dots = { _loadScreen.dot1, _loadScreen.dot2, _loadScreen.dot3 }
     for i, dot in ipairs(dots) do
-        dot.Visible  = slideIn > 0.5
-        dot.Position = Vector2.new(cx + dOff[i], dotY + math.sin(_loadT * 4 + (i-1)*1.2) * 2)
-        dot.Color    = lc(pal.textDim, pal.accent, (math.sin(_loadT*3 + (i-1)*1.2) + 1)/2)
+        dot.Visible      = slideIn > 0.5
+        dot.Position     = Vector2.new(cx + dOff[i], dotY + math.sin(_loadT * 4 + (i-1)*1.2) * 2)
+        dot.Color        = lc(pal.textDim, pal.accent, (math.sin(_loadT*3 + (i-1)*1.2) + 1)/2)
         dot.Transparency = math.min(1, (slideIn - 0.5) * 2)
-    end
-
-    if animDone and _loadDismiss then
-        local fadeOut = math.min(1, (_loadT - 1.25) / 0.25)
-        _loadScreen.bg.Transparency = 1 - fadeOut
-        _loadScreen.panel.Transparency = 1 - fadeOut
-        for _, d in pairs(_loadScreen) do
-            if d ~= _loadScreen.bg and d ~= _loadScreen.panel then
-                d.Visible = false
-            end
-        end
-        if fadeOut >= 1 then
-            for _, d in pairs(_loadScreen) do d.Visible = false end
-            bliss._loadDone = true
-        end
     end
 end
 
@@ -1461,8 +1470,11 @@ function bliss.new(opts)
     bliss._windows[win._name] = win
 
     ensureLoadScreen()
-    _loadT = 0
+    _loadT      = 0
     _loadDismiss = false
+    _loadReady  = false
+    _loadFading = false
+    _loadFadeT  = 0
 
     if opts.Watermark then
         local wm = opts.Watermark
@@ -1525,7 +1537,14 @@ end
 function bliss:SetToggleKey(k) self._toggleKey = k end
 
 function bliss:FinishLoading()
-    _loadDismiss = true
+    if _loadReady then
+        _loadDismiss = true
+    else
+        task.spawn(function()
+            while not _loadReady do task.wait() end
+            _loadDismiss = true
+        end)
+    end
 end
 
 function bliss:Destroy(name)
@@ -1604,7 +1623,9 @@ table.insert(bliss._connections, RS.RenderStepped:Connect(function()
     mScroll = 0
 end))
 
-task.delay(1.25, function()
+task.spawn(function()
+    task.wait(2.25)
+    while not _loadReady do task.wait() end
     _loadDismiss = true
 end)
 
