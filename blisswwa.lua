@@ -486,11 +486,14 @@ local function mkWatermark(opts)
         _pulse  = 0,
     }
     local z = 120
-    wm._d.bg    = newRect({ Rounding = 4, ZIndex = z })
-    wm._d.bgOut = newRect({ Filled = false, Rounding = 4, ZIndex = z })
-    wm._d.txt   = newLabel({ Size = sz.fontXs, ZIndex = z + 1 })
-    wm._d.g1    = newRect({ Filled = false, Rounding = 6, ZIndex = z - 1 })
-    wm._d.g2    = newRect({ Filled = false, Rounding = 9, ZIndex = z - 2 })
+    wm._d.bg    = newRect({ Rounding = 5, ZIndex = z })
+    wm._d.bgOut = newRect({ Filled = false, Rounding = 5, ZIndex = z })
+    wm._d.accent = newRect({ Rounding = 3, ZIndex = z + 1 })
+    wm._d.txt   = newLabel({ Size = sz.fontSm, ZIndex = z + 2 })
+    wm._d.g1    = newRect({ Filled = false, Rounding = 7,  ZIndex = z - 1, Thickness = 3 })
+    wm._d.g2    = newRect({ Filled = false, Rounding = 10, ZIndex = z - 2, Thickness = 2 })
+    wm._d.g3    = newRect({ Filled = false, Rounding = 14, ZIndex = z - 3, Thickness = 1 })
+    wm._d.g4    = newRect({ Filled = false, Rounding = 19, ZIndex = z - 4, Thickness = 1 })
     return wm
 end
 
@@ -507,30 +510,58 @@ local function updateWatermark(wm, dt, cam)
     local txt = wm.info
     txt = txt:gsub("{fps}", tostring(fps))
     txt = txt:gsub("{username}", uname)
-    local tw = #txt * 5.2 + 14
-    local th = 18
+
+    local charW = 7.2
+    local padX  = 20
+    local padY  = 10
+    local th    = sz.fontSm + padY * 2
+    local tw    = math.ceil(#txt * charW) + padX * 2
+    local margin = 12
     local px, py
-    local margin = 10
     if wm.posH == "left" then px = margin
-    elseif wm.posH == "middle" then px = vp.X/2 - tw/2
+    elseif wm.posH == "middle" then px = math.floor(vp.X/2 - tw/2)
     else px = vp.X - tw - margin end
     if wm.posV == "bottom" then py = vp.Y - th - margin
-    elseif wm.posV == "middle" then py = vp.Y/2 - th/2
+    elseif wm.posV == "middle" then py = math.floor(vp.Y/2 - th/2)
     else py = margin end
 
-    local glowA = (math.sin(wm._pulse) * 0.5 + 0.5) * 0.12
-    wm._d.g2.Visible = true; wm._d.g1.Visible = true
-    wm._d.g2.Position = Vector2.new(px - 7, py - 7); wm._d.g2.Size = Vector2.new(tw + 14, th + 14)
-    wm._d.g2.Color = wm.color; wm._d.g2.Thickness = 1; wm._d.g2.Transparency = glowA * 0.4
-    wm._d.g1.Position = Vector2.new(px - 3, py - 3); wm._d.g1.Size = Vector2.new(tw + 6, th + 6)
-    wm._d.g1.Color = wm.color; wm._d.g1.Thickness = 1; wm._d.g1.Transparency = glowA * 0.7
+    local glowStr = (math.sin(wm._pulse) * 0.5 + 0.5) * 0.18 + 0.08
+    local col = wm.color
+    local glows = {
+        { wm._d.g1, 2,  glowStr * 0.90 },
+        { wm._d.g2, 6,  glowStr * 0.55 },
+        { wm._d.g3, 11, glowStr * 0.28 },
+        { wm._d.g4, 17, glowStr * 0.10 },
+    }
+    for _, g in ipairs(glows) do
+        local d, pad, alpha = g[1], g[2], g[3]
+        d.Visible      = true
+        d.Position     = Vector2.new(px - pad, py - pad)
+        d.Size         = Vector2.new(tw + pad*2, th + pad*2)
+        d.Color        = col
+        d.Transparency = math.max(0, math.min(1, alpha))
+    end
 
-    for _, d in pairs(wm._d) do d.Visible = true end
-    wm._d.bg.Position  = Vector2.new(px, py); wm._d.bg.Size = Vector2.new(tw, th); wm._d.bg.Color = pal.panel
-    wm._d.bgOut.Position = Vector2.new(px, py); wm._d.bgOut.Size = Vector2.new(tw, th); wm._d.bgOut.Color = pal.borderDim
-    wm._d.txt.Text     = txt
-    wm._d.txt.Position = Vector2.new(px + 7, py + (th - sz.fontXs)/2 - 1)
-    wm._d.txt.Color    = wm.color
+    wm._d.bg.Visible    = true
+    wm._d.bg.Position   = Vector2.new(px, py)
+    wm._d.bg.Size       = Vector2.new(tw, th)
+    wm._d.bg.Color      = pal.panel
+
+    wm._d.bgOut.Visible   = true
+    wm._d.bgOut.Position  = Vector2.new(px, py)
+    wm._d.bgOut.Size      = Vector2.new(tw, th)
+    wm._d.bgOut.Color     = pal.borderDim
+
+    wm._d.accent.Visible   = true
+    wm._d.accent.Position  = Vector2.new(px, py)
+    wm._d.accent.Size      = Vector2.new(3, th)
+    wm._d.accent.Color     = col
+
+    wm._d.txt.Visible   = true
+    wm._d.txt.Text      = txt
+    wm._d.txt.Position  = Vector2.new(px + padX, py + (th - sz.fontSm)/2 - 1)
+    wm._d.txt.Color     = pal.text
+    wm._d.txt.Size      = sz.fontSm
 end
 
 local function mkToggle(o, flags)
@@ -1582,7 +1613,7 @@ function bliss.new(opts)
         titleDiv   = newLine({ Color = pal.borderDim, ZIndex = 3 }),
         dot        = newDot({ Color = pal.accent, Radius = 3, NumSides = 16, ZIndex = 4 }),
         name       = newLabel({ Color = pal.text, Size = sz.font, ZIndex = 4 }),
-        slogan     = newLabel({ Text = "stay blissful!  ", Color = pal.textDim, Size = sz.fontXs, Font = 5, ZIndex = 4 }),
+        slogan     = newLabel({ Text = "stay blissful!", Color = pal.textDim, Size = sz.fontXs, Font = 3, ZIndex = 4 }),
         side       = newRect({ ZIndex = 2 }),
         sideDiv    = newLine({ Color = pal.borderDim, ZIndex = 3 }),
         contentDiv = newLine({ Color = pal.borderDim, ZIndex = 3, Transparency = 0.5 }),
