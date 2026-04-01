@@ -165,13 +165,18 @@ pcall(function()
     insetY = inset.Y or 0
 end)
 
-local _tooltipDraw = {
-    bg   = newRect({ Rounding = 3, ZIndex = 200 }),
-    out  = newRect({ Filled = false, Rounding = 3, ZIndex = 200 }),
-    txt  = newLabel({ Size = sz.fontXs, ZIndex = 201, Outline = true }),
-}
+local _tooltipDraw = nil
+local function ensureTooltip()
+    if _tooltipDraw then return end
+    _tooltipDraw = {
+        bg  = newRect({ Rounding = 3, ZIndex = 200 }),
+        out = newRect({ Filled = false, Rounding = 3, ZIndex = 200 }),
+        txt = newLabel({ Size = sz.fontXs, ZIndex = 201, Outline = true }),
+    }
+end
 
 local function drawTooltip(text, tx, ty)
+    ensureTooltip()
     local tw = #text * 5.2 + 12
     local th = 16
     local bx = clamp(tx, 2, 9999)
@@ -191,30 +196,36 @@ local function drawTooltip(text, tx, ty)
 end
 
 local function hideTooltip()
+    if not _tooltipDraw then return end
     _tooltipDraw.bg.Visible  = false
     _tooltipDraw.out.Visible = false
     _tooltipDraw.txt.Visible = false
 end
 
-local _loadScreen = {
-    bg     = newRect({ ZIndex = 999, Color = pal.bgDeep }),
-    panel  = newRect({ ZIndex = 1000, Rounding = 6 }),
-    panOut = newRect({ ZIndex = 1000, Filled = false, Rounding = 6 }),
-    bar    = newRect({ ZIndex = 1001, Rounding = 2 }),
-    barBg  = newRect({ ZIndex = 1000, Rounding = 2 }),
-    txt    = newLabel({ ZIndex = 1002, Size = sz.font }),
-    sub    = newLabel({ ZIndex = 1002, Size = sz.fontXs, Color = pal.textDim }),
-    dot1   = newDot({ ZIndex = 1002, Radius = 3, NumSides = 16 }),
-    dot2   = newDot({ ZIndex = 1002, Radius = 3, NumSides = 16 }),
-    dot3   = newDot({ ZIndex = 1002, Radius = 3, NumSides = 16 }),
-    glowL1 = newRect({ ZIndex = 998, Rounding = 8, Filled = true }),
-    glowL2 = newRect({ ZIndex = 997, Rounding = 12, Filled = true }),
-    glowL3 = newRect({ ZIndex = 996, Rounding = 16, Filled = true }),
-}
+local _loadScreen = nil
+local function ensureLoadScreen()
+    if _loadScreen then return end
+    _loadScreen = {
+        bg     = newRect({ ZIndex = 999, Color = pal.bgDeep }),
+        panel  = newRect({ ZIndex = 1000, Rounding = 6 }),
+        panOut = newRect({ ZIndex = 1000, Filled = false, Rounding = 6 }),
+        bar    = newRect({ ZIndex = 1001, Rounding = 2 }),
+        barBg  = newRect({ ZIndex = 1000, Rounding = 2 }),
+        txt    = newLabel({ ZIndex = 1002, Size = sz.font }),
+        sub    = newLabel({ ZIndex = 1002, Size = sz.fontXs, Color = pal.textDim }),
+        dot1   = newDot({ ZIndex = 1002, Radius = 3, NumSides = 16 }),
+        dot2   = newDot({ ZIndex = 1002, Radius = 3, NumSides = 16 }),
+        dot3   = newDot({ ZIndex = 1002, Radius = 3, NumSides = 16 }),
+        glowL1 = newRect({ ZIndex = 998, Rounding = 8, Filled = true }),
+        glowL2 = newRect({ ZIndex = 997, Rounding = 12, Filled = true }),
+        glowL3 = newRect({ ZIndex = 996, Rounding = 16, Filled = true }),
+    }
+end
 local _loadT  = 0
 local _loadDismiss = false
 
 local function updateLoadScreen(dt, cam)
+    ensureLoadScreen()
     _loadT = _loadT + dt
     local animDone = _loadT >= 1.25
     if _loadDismiss and animDone then
@@ -1449,6 +1460,10 @@ function bliss.new(opts)
 
     bliss._windows[win._name] = win
 
+    ensureLoadScreen()
+    _loadT = 0
+    _loadDismiss = false
+
     if opts.Watermark then
         local wm = opts.Watermark
         bliss._watermark = mkWatermark({
@@ -1531,8 +1546,8 @@ function bliss:DestroyAll()
     for name in pairs(self._windows) do self:Destroy(name) end
     for _, c in ipairs(self._connections) do pcall(c.Disconnect, c) end
     self._connections = {}
-    for _, d in pairs(_tooltipDraw) do kill(d) end
-    for _, d in pairs(_loadScreen) do kill(d) end
+    for _, d in pairs(_tooltipDraw or {}) do kill(d) end
+    if _loadScreen then for _, d in pairs(_loadScreen) do kill(d) end end
     if self._watermark then for _, d in pairs(self._watermark._d) do kill(d) end end
 end
 
@@ -1588,9 +1603,6 @@ table.insert(bliss._connections, RS.RenderStepped:Connect(function()
     mClick  = false
     mScroll = 0
 end))
-
-_loadT = 0
-_loadDismiss = false
 
 task.delay(1.25, function()
     _loadDismiss = true
