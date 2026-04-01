@@ -512,8 +512,8 @@ local function updateWatermark(wm, dt, cam)
     txt = txt:gsub("{username}", uname)
 
     local charW = 7.2
-    local padX  = 20
-    local padY  = 10
+    local padX  = 14
+    local padY  = 5
     local th    = sz.fontSm + padY * 2
     local tw    = math.ceil(#txt * charW) + padX * 2
     local margin = 12
@@ -989,14 +989,31 @@ local function mkTextbox(o, flags)
     function e:set(v) self.val = v; self.cb(v); if self.flag and flags then flags[self.flag] = v end end
 
     local function charFromKey(kc, shift)
-        local n = kc.Name
-        if kc == Enum.KeyCode.Space then return " " end
-        if kc == Enum.KeyCode.Backspace or kc == Enum.KeyCode.Return or kc == Enum.KeyCode.Escape then return nil end
-        if n and #n == 1 and n:match("%a") then return shift and n:upper() or n:lower() end
-        if n and #n == 1 and n:match("%d") then
-            local sm = {["1"]="!",["2"]="@",["3"]="#",["4"]="$",["5"]="%",["6"]="^",["7"]="&",["8"]="*",["9"]="(",["0"]=")"}
-            return shift and (sm[n] or n) or n
+        if kc == Enum.KeyCode.Space     then return " " end
+        if kc == Enum.KeyCode.Backspace then return nil end
+        if kc == Enum.KeyCode.Return    then return nil end
+        if kc == Enum.KeyCode.Escape    then return nil end
+
+        local ok, s = pcall(function()
+            return UIS:GetStringForKeyCode(kc)
+        end)
+        if ok and s and #s == 1 then
+            if s:match("%a") then return shift and s:upper() or s:lower() end
+            if s:match("[%d%p]") then
+                if shift then
+                    local sm = {
+                        ["1"]="!",["2"]="@",["3"]="#",["4"]="$",["5"]="%",
+                        ["6"]="^",["7"]="&",["8"]="*",["9"]="(",["0"]=")",
+                        ["`"]="~",["-"]="_",["="]="+",["`"]="~",["["]= "{",
+                        ["]"]="}",["\\"]= "|",[";"]=":",["'"]='"',[","]="<",
+                        ["."]=">", ["/"]="?",
+                    }
+                    return sm[s] or s
+                end
+                return s
+            end
         end
+
         local specials = {
             [Enum.KeyCode.Period]       = {".",">"}, [Enum.KeyCode.Comma]        = {",","<"},
             [Enum.KeyCode.Minus]        = {"-","_"}, [Enum.KeyCode.Equals]       = {"=","+"},
@@ -1004,9 +1021,23 @@ local function mkTextbox(o, flags)
             [Enum.KeyCode.Quote]        = {"'",'"'}, [Enum.KeyCode.LeftBracket]  = {"[","{"},
             [Enum.KeyCode.RightBracket] = {"]","}"}, [Enum.KeyCode.BackSlash]    = {"\\","|"},
             [Enum.KeyCode.Backquote]    = {"`","~"},
+            [Enum.KeyCode.One]   = {"1","!"}, [Enum.KeyCode.Two]   = {"2","@"},
+            [Enum.KeyCode.Three] = {"3","#"}, [Enum.KeyCode.Four]  = {"4","$"},
+            [Enum.KeyCode.Five]  = {"5","%"}, [Enum.KeyCode.Six]   = {"6","^"},
+            [Enum.KeyCode.Seven] = {"7","&"}, [Enum.KeyCode.Eight] = {"8","*"},
+            [Enum.KeyCode.Nine]  = {"9","("}, [Enum.KeyCode.Zero]  = {"0",")"},
         }
-        local s = specials[kc]
-        if s then return shift and s[2] or s[1] end
+        local sp = specials[kc]
+        if sp then return shift and sp[2] or sp[1] end
+
+        local letterMap = {
+            A="a",B="b",C="c",D="d",E="e",F="f",G="g",H="h",I="i",J="j",
+            K="k",L="l",M="m",N="n",O="o",P="p",Q="q",R="r",S="s",T="t",
+            U="u",V="v",W="w",X="x",Y="y",Z="z",
+        }
+        local n = kc.Name
+        if n and letterMap[n] then return shift and n or letterMap[n] end
+
         return nil
     end
 
@@ -1142,8 +1173,8 @@ local function mkTextbox(o, flags)
         self._d.glow2.Transparency = math.max(0, ga * 0.25)
 
         local display = #self.val > 0 and self.val or self.ph
-        local charW    = 6.5
-        local innerW   = bw - 12
+        local charW    = 7.8
+        local innerW   = bw - 14
         local maxChars = math.floor(innerW / charW)
         local showStr
         local cursorVis = 0
@@ -1669,9 +1700,9 @@ local function renderWin(w, dt)
     local at = w._tabs[w._active]
     if at then
         if hit(mx, my, cx, cy, cw, ch) and mScroll ~= 0 then
-            at._scrollV = at._scrollV - mScroll * 26
+            at._scrollV = at._scrollV - mScroll * 10
         end
-        at._scrollV = at._scrollV * 0.82
+        at._scrollV = at._scrollV * 0.88
         at._scroll  = at._scroll + at._scrollV
         local totalH = 0
         for _, el in ipairs(at._elems) do totalH = totalH + el.h + sz.elemGap end
