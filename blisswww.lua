@@ -1142,13 +1142,20 @@ local function mkTextbox(o, flags)
         self._d.glow2.Transparency = math.max(0, ga * 0.25)
 
         local display = #self.val > 0 and self.val or self.ph
-        local charW   = 5.8
-        local maxChars = math.floor((bw - 12) / charW)
-        local showStr  = display
-        if #self.val > maxChars then
-            showStr = self.val:sub(#self.val - maxChars + 1)
-        elseif #self.val == 0 then
-            showStr = self.ph
+        local charW    = 6.5
+        local innerW   = bw - 12
+        local maxChars = math.floor(innerW / charW)
+        local showStr
+        local cursorVis = 0
+        if #self.val == 0 then
+            showStr   = self.ph
+            cursorVis = 0
+        elseif #self.val > maxChars then
+            showStr   = self.val:sub(#self.val - maxChars + 1)
+            cursorVis = maxChars
+        else
+            showStr   = self.val
+            cursorVis = #self.val
         end
 
         self._d.txt.Text     = showStr
@@ -1156,12 +1163,11 @@ local function mkTextbox(o, flags)
         self._d.txt.Color    = #self.val > 0 and pal.text or pal.textDim
 
         if self._focus then
-            local visLen = math.min(#self.val, maxChars)
-            local curX = bx + 6 + visLen * charW + 1
-            self._d.cur.Visible     = self._blinkOn
-            self._d.cur.Position    = Vector2.new(curX, by + 4)
-            self._d.cur.Size        = Vector2.new(1, boxH - 8)
-            self._d.cur.Color       = pal.accent
+            local curX = bx + 6 + cursorVis * charW + 1
+            self._d.cur.Visible      = self._blinkOn
+            self._d.cur.Position     = Vector2.new(curX, by + 3)
+            self._d.cur.Size         = Vector2.new(1, boxH - 6)
+            self._d.cur.Color        = pal.accent
             self._d.cur.Transparency = 1
         else
             self._d.cur.Visible = false
@@ -1285,37 +1291,74 @@ local function mkColorPicker(o, flags)
 end
 
 local function mkConfigUI(win)
+    local closedH  = sz.elemH
+    local panelH   = 104
+    local openH    = closedH + 6 + panelH
     local e = {
-        type = "config", name = "config", h = sz.elemH, _open = false, _openA = 0,
-        _nameVal = "", _d = {}, _od = {}, _ob = {},
+        type = "config", name = "config",
+        h = closedH,
+        _open = false, _openA = 0,
+        _nameVal = "", _nameFocus = false, _blinkOn = true, _blinkT = 0,
+        _repeatKey = nil, _repeatTimer = 0, _repeatDelay = 0,
+        _d = {},
     }
     local z = 80
-    e._d.btn    = newRect({ Rounding = 3, ZIndex = z })
-    e._d.btnOut = newRect({ Filled = false, Rounding = 3, ZIndex = z })
-    e._d.btnTxt = newLabel({ Size = sz.fontXs, Center = true, ZIndex = z + 1 })
-    e._d.panel  = newRect({ Rounding = 4, ZIndex = z + 10 })
-    e._d.panOut = newRect({ Filled = false, Rounding = 4, ZIndex = z + 10 })
-    e._d.title  = newLabel({ Size = sz.fontSm, ZIndex = z + 11 })
+    e._d.btn      = newRect({ Rounding = 3, ZIndex = z })
+    e._d.btnOut   = newRect({ Filled = false, Rounding = 3, ZIndex = z })
+    e._d.btnTxt   = newLabel({ Size = sz.fontSm, Center = true, ZIndex = z + 1 })
+    e._d.panel    = newRect({ Rounding = 4, ZIndex = z + 10 })
+    e._d.panOut   = newRect({ Filled = false, Rounding = 4, ZIndex = z + 10 })
+    e._d.title    = newLabel({ Size = sz.fontXs, ZIndex = z + 11 })
+    e._d.inp      = newRect({ Rounding = 3, ZIndex = z + 11 })
+    e._d.inpOut   = newRect({ Filled = false, Rounding = 3, ZIndex = z + 11 })
+    e._d.inpTxt   = newLabel({ Size = sz.fontXs, ZIndex = z + 12 })
+    e._d.inpCur   = newRect({ Rounding = 1, ZIndex = z + 13 })
     e._d.saveBtn  = newRect({ Rounding = 3, ZIndex = z + 11 })
     e._d.saveBtnO = newRect({ Filled = false, Rounding = 3, ZIndex = z + 11 })
     e._d.saveTxt  = newLabel({ Size = sz.fontXs, Center = true, ZIndex = z + 12 })
     e._d.loadBtn  = newRect({ Rounding = 3, ZIndex = z + 11 })
     e._d.loadBtnO = newRect({ Filled = false, Rounding = 3, ZIndex = z + 11 })
     e._d.loadTxt  = newLabel({ Size = sz.fontXs, Center = true, ZIndex = z + 12 })
-    e._d.inp    = newRect({ Rounding = 3, ZIndex = z + 11 })
-    e._d.inpOut = newRect({ Filled = false, Rounding = 3, ZIndex = z + 11 })
-    e._d.inpTxt = newLabel({ Size = sz.fontXs, ZIndex = z + 12 })
 
-    local function getConfigs()
-        local t = {}
-        if not syn or not syn.protected_call then return t end
-        pcall(function()
-            for _, f in ipairs(listfiles("bliss_configs")) do
-                local name = f:match("([^/\\]+)%.json$")
-                if name then t[#t+1] = name end
+    local iconn, econn
+    local function openInput()
+        bliss._textFocused = true
+        if iconn then iconn:Disconnect(); iconn = nil end
+        if econn then econn:Disconnect(); econn = nil end
+        e._repeatKey = nil; e._repeatTimer = 0; e._repeatDelay = 0
+
+        local function applyKey(kc)
+            local shift = UIS:IsKeyDown(Enum.KeyCode.LeftShift) or UIS:IsKeyDown(Enum.KeyCode.RightShift)
+            if kc == Enum.KeyCode.Backspace then
+                if #e._nameVal > 0 then e._nameVal = e._nameVal:sub(1, -2) end
+                return
+            end
+            local n = kc.Name
+            if kc == Enum.KeyCode.Space then e._nameVal = e._nameVal .. " "
+            elseif n and #n == 1 and n:match("%a") then e._nameVal = e._nameVal .. (shift and n:upper() or n:lower())
+            elseif n and #n == 1 and n:match("%d") then e._nameVal = e._nameVal .. n
+            elseif kc == Enum.KeyCode.Minus then e._nameVal = e._nameVal .. (shift and "_" or "-")
+            elseif kc == Enum.KeyCode.Period then e._nameVal = e._nameVal .. "."
+            end
+        end
+
+        iconn = UIS.InputBegan:Connect(function(io, gp)
+            if not e._nameFocus or gp then return end
+            if io.UserInputType ~= Enum.UserInputType.Keyboard then return end
+            if io.KeyCode == Enum.KeyCode.Return or io.KeyCode == Enum.KeyCode.Escape then
+                e._nameFocus = false; bliss._textFocused = false
+                if iconn then iconn:Disconnect(); iconn = nil end
+                if econn then econn:Disconnect(); econn = nil end
+                e._repeatKey = nil; return
+            end
+            applyKey(io.KeyCode)
+            e._repeatKey = io.KeyCode; e._repeatTimer = 0; e._repeatDelay = 0.5
+        end)
+        econn = UIS.InputEnded:Connect(function(io)
+            if io.UserInputType == Enum.UserInputType.Keyboard and io.KeyCode == e._repeatKey then
+                e._repeatKey = nil
             end
         end)
-        return t
     end
 
     local function saveConfig(name)
@@ -1324,9 +1367,7 @@ local function mkConfigUI(win)
             if not isfolder("bliss_configs") then makefolder("bliss_configs") end
             local data = {}
             for k, v in pairs(win._flags) do
-                if type(v) == "boolean" or type(v) == "number" or type(v) == "string" then
-                    data[k] = v
-                end
+                if type(v) == "boolean" or type(v) == "number" or type(v) == "string" then data[k] = v end
             end
             writefile("bliss_configs/" .. name .. ".json", game:GetService("HttpService"):JSONEncode(data))
         end)
@@ -1335,82 +1376,169 @@ local function mkConfigUI(win)
     local function loadConfig(name)
         if not name or #name == 0 then return end
         pcall(function()
-            local raw = readfile("bliss_configs/" .. name .. ".json")
+            local raw  = readfile("bliss_configs/" .. name .. ".json")
             local data = game:GetService("HttpService"):JSONDecode(raw)
             for k, v in pairs(data) do
                 win._flags[k] = v
                 for _, tab in ipairs(win._tabs) do
                     for _, el in ipairs(tab._elems) do
-                        if el.flag == k and el.set then
-                            pcall(function() el:set(v) end)
-                        end
+                        if el.flag == k and el.set then pcall(function() el:set(v) end) end
                     end
                 end
             end
         end)
     end
 
-    function e:draw(px, py, w, vis)
+    function e:draw(px, py, w, vis, fdt)
         for _, d in pairs(self._d) do d.Visible = false end
-        if not vis then return end
+        if not vis then
+            self.h = closedH
+            return
+        end
+
         local bx, by = px + 4, py + 2
         local bw, bh = w - 8, sz.elemH - 4
         local hov = hit(mx, my, bx, by, bw, bh)
         if hov and mClick then self._open = not self._open end
-        self._openA = lerp(self._openA, self._open and 1 or 0, 0.16)
+        self._openA = lerp(self._openA, self._open and 1 or 0, 0.18)
+        self.h = closedH + math.floor(self._openA * (panelH + 6))
 
-        self._d.btn.Visible    = true
-        self._d.btnOut.Visible = true
-        self._d.btnTxt.Visible = true
-        self._d.btn.Position   = Vector2.new(bx, by); self._d.btn.Size = Vector2.new(bw, bh)
-        self._d.btn.Color      = hov and pal.hover or pal.panel
+        self._d.btn.Visible     = true
+        self._d.btnOut.Visible  = true
+        self._d.btnTxt.Visible  = true
+        self._d.btn.Position    = Vector2.new(bx, by); self._d.btn.Size = Vector2.new(bw, bh)
+        self._d.btn.Color       = hov and pal.hover or pal.panel
         self._d.btnOut.Position = Vector2.new(bx, by); self._d.btnOut.Size = Vector2.new(bw, bh)
-        self._d.btnOut.Color   = pal.borderDim
-        self._d.btnTxt.Text    = "config manager"
-        self._d.btnTxt.Position = Vector2.new(bx + bw/2, by + (bh - sz.fontXs)/2 - 1)
-        self._d.btnTxt.Color   = pal.textSub
+        self._d.btnOut.Color    = self._open and pal.accent or pal.borderDim
+        self._d.btnTxt.Text     = "config manager"
+        self._d.btnTxt.Position = Vector2.new(bx + bw/2, by + (bh - sz.fontSm)/2 - 1)
+        self._d.btnTxt.Color    = self._open and pal.text or pal.textSub
 
-        if self._openA > 0.01 then
-            local pw, ph = w - 8, 80
-            local ppx, ppy = px + 4, py + sz.elemH + 2
-            for _, d in pairs(self._d) do d.Visible = true end
-            self._d.panel.Position  = Vector2.new(ppx, ppy); self._d.panel.Size = Vector2.new(pw, ph); self._d.panel.Color = pal.bgDeep
-            self._d.panOut.Position = Vector2.new(ppx, ppy); self._d.panOut.Size = Vector2.new(pw, ph); self._d.panOut.Color = pal.border
-            self._d.title.Text      = "save / load config"
-            self._d.title.Position  = Vector2.new(ppx + 8, ppy + 6); self._d.title.Color = pal.textDim
+        if self._openA < 0.02 then return end
 
-            local inpX, inpY = ppx + 6, ppy + 22
-            local inpW, inpH = pw - 12, 16
-            self._d.inp.Position    = Vector2.new(inpX, inpY); self._d.inp.Size = Vector2.new(inpW, inpH); self._d.inp.Color = pal.panel
-            self._d.inpOut.Position = Vector2.new(inpX, inpY); self._d.inpOut.Size = Vector2.new(inpW, inpH); self._d.inpOut.Color = pal.borderDim
-            self._d.inpTxt.Text     = #self._nameVal > 0 and self._nameVal or "config name..."
-            self._d.inpTxt.Position = Vector2.new(inpX + 4, inpY + (inpH - sz.fontXs)/2 - 1)
-            self._d.inpTxt.Color    = #self._nameVal > 0 and pal.text or pal.textDim
+        local pw  = bw
+        local ppx = bx
+        local ppy = by + bh + 4
 
-            local sbW = (pw - 18) / 2
-            local sbY = ppy + 46
-            self._d.saveBtn.Position  = Vector2.new(ppx + 6, sbY); self._d.saveBtn.Size = Vector2.new(sbW, 18)
-            self._d.saveBtn.Color     = pal.panel
-            self._d.saveBtnO.Position = Vector2.new(ppx + 6, sbY); self._d.saveBtnO.Size = Vector2.new(sbW, 18)
-            self._d.saveBtnO.Color    = pal.borderDim
-            self._d.saveTxt.Text      = "save"
-            self._d.saveTxt.Position  = Vector2.new(ppx + 6 + sbW/2, sbY + 4); self._d.saveTxt.Color = pal.textSub
+        self._d.panel.Visible    = true
+        self._d.panOut.Visible   = true
+        self._d.panel.Position   = Vector2.new(ppx, ppy); self._d.panel.Size = Vector2.new(pw, panelH)
+        self._d.panel.Color      = pal.bgDeep
+        self._d.panOut.Position  = Vector2.new(ppx, ppy); self._d.panOut.Size = Vector2.new(pw, panelH)
+        self._d.panOut.Color     = pal.border
 
-            self._d.loadBtn.Position  = Vector2.new(ppx + 6 + sbW + 6, sbY); self._d.loadBtn.Size = Vector2.new(sbW, 18)
-            self._d.loadBtn.Color     = pal.panel
-            self._d.loadBtnO.Position = Vector2.new(ppx + 6 + sbW + 6, sbY); self._d.loadBtnO.Size = Vector2.new(sbW, 18)
-            self._d.loadBtnO.Color    = pal.borderDim
-            self._d.loadTxt.Text      = "load"
-            self._d.loadTxt.Position  = Vector2.new(ppx + 6 + sbW + 6 + sbW/2, sbY + 4); self._d.loadTxt.Color = pal.textSub
+        self._d.title.Visible   = true
+        self._d.title.Text      = "config name"
+        self._d.title.Position  = Vector2.new(ppx + 8, ppy + 7)
+        self._d.title.Color     = pal.textDim
 
-            if hit(mx, my, ppx + 6, sbY, sbW, 18) and mClick then saveConfig(self._nameVal) end
-            if hit(mx, my, ppx + 6 + sbW + 6, sbY, sbW, 18) and mClick then loadConfig(self._nameVal) end
+        local inpX  = ppx + 6
+        local inpY  = ppy + 22
+        local inpW  = pw - 12
+        local inpH  = 18
+        local inpHov = hit(mx, my, inpX, inpY, inpW, inpH)
 
-            if mClick and not hit(mx, my, ppx, ppy, pw, ph) and not hov then self._open = false end
+        if mClick then
+            local was = self._nameFocus
+            self._nameFocus = inpHov
+            if self._nameFocus and not was then openInput()
+            elseif was and not self._nameFocus then
+                bliss._textFocused = false
+                if iconn then iconn:Disconnect(); iconn = nil end
+                if econn then econn:Disconnect(); econn = nil end
+                self._repeatKey = nil
+            end
+        end
+
+        local frameDt = fdt or (1/60)
+        if self._repeatKey then
+            self._repeatTimer = self._repeatTimer + frameDt
+            if self._repeatDelay > 0 then
+                if self._repeatTimer >= self._repeatDelay then self._repeatDelay = 0; self._repeatTimer = 0 end
+            else
+                if self._repeatTimer >= 0.05 then
+                    local shift = UIS:IsKeyDown(Enum.KeyCode.LeftShift) or UIS:IsKeyDown(Enum.KeyCode.RightShift)
+                    local kc = self._repeatKey
+                    if kc == Enum.KeyCode.Backspace then
+                        if #self._nameVal > 0 then self._nameVal = self._nameVal:sub(1,-2) end
+                    end
+                    self._repeatTimer = 0
+                end
+            end
+        end
+
+        if self._nameFocus then
+            self._blinkT = self._blinkT + frameDt
+            if self._blinkT >= 0.53 then self._blinkT = 0; self._blinkOn = not self._blinkOn end
+        end
+
+        self._d.inp.Visible     = true
+        self._d.inpOut.Visible  = true
+        self._d.inpTxt.Visible  = true
+        self._d.inp.Position    = Vector2.new(inpX, inpY); self._d.inp.Size = Vector2.new(inpW, inpH)
+        self._d.inp.Color       = pal.panel
+        self._d.inpOut.Position = Vector2.new(inpX, inpY); self._d.inpOut.Size = Vector2.new(inpW, inpH)
+        self._d.inpOut.Color    = self._nameFocus and pal.accent or (inpHov and pal.borderLit or pal.borderDim)
+
+        local charW   = 6.5
+        local maxC    = math.floor((inpW - 10) / charW)
+        local showStr = #self._nameVal > 0 and (
+            #self._nameVal > maxC and self._nameVal:sub(#self._nameVal - maxC + 1) or self._nameVal
+        ) or "config name..."
+        local cursorC = math.min(#self._nameVal, maxC)
+
+        self._d.inpTxt.Text     = showStr
+        self._d.inpTxt.Position = Vector2.new(inpX + 5, inpY + (inpH - sz.fontXs)/2 - 1)
+        self._d.inpTxt.Color    = #self._nameVal > 0 and pal.text or pal.textDim
+
+        self._d.inpCur.Visible = self._nameFocus and self._blinkOn
+        self._d.inpCur.Position = Vector2.new(inpX + 5 + cursorC * charW, inpY + 3)
+        self._d.inpCur.Size     = Vector2.new(1, inpH - 6)
+        self._d.inpCur.Color    = pal.accent
+        self._d.inpCur.Transparency = 1
+
+        local sbW = math.floor((pw - 18) / 2)
+        local sbY = ppy + 52
+        local sbH = 22
+
+        local savHov = hit(mx, my, ppx + 6, sbY, sbW, sbH)
+        local lodHov = hit(mx, my, ppx + 6 + sbW + 6, sbY, sbW, sbH)
+
+        self._d.saveBtn.Visible   = true; self._d.saveBtnO.Visible = true; self._d.saveTxt.Visible = true
+        self._d.saveBtn.Position  = Vector2.new(ppx + 6, sbY); self._d.saveBtn.Size = Vector2.new(sbW, sbH)
+        self._d.saveBtn.Color     = savHov and pal.hover or pal.panel
+        self._d.saveBtnO.Position = Vector2.new(ppx + 6, sbY); self._d.saveBtnO.Size = Vector2.new(sbW, sbH)
+        self._d.saveBtnO.Color    = savHov and pal.accent or pal.borderDim
+        self._d.saveTxt.Text      = "save"
+        self._d.saveTxt.Position  = Vector2.new(ppx + 6 + sbW/2, sbY + (sbH - sz.fontXs)/2 - 1)
+        self._d.saveTxt.Color     = savHov and pal.text or pal.textSub
+
+        self._d.loadBtn.Visible   = true; self._d.loadBtnO.Visible = true; self._d.loadTxt.Visible = true
+        self._d.loadBtn.Position  = Vector2.new(ppx + 6 + sbW + 6, sbY); self._d.loadBtn.Size = Vector2.new(sbW, sbH)
+        self._d.loadBtn.Color     = lodHov and pal.hover or pal.panel
+        self._d.loadBtnO.Position = Vector2.new(ppx + 6 + sbW + 6, sbY); self._d.loadBtnO.Size = Vector2.new(sbW, sbH)
+        self._d.loadBtnO.Color    = lodHov and pal.accent or pal.borderDim
+        self._d.loadTxt.Text      = "load"
+        self._d.loadTxt.Position  = Vector2.new(ppx + 6 + sbW + 6 + sbW/2, sbY + (sbH - sz.fontXs)/2 - 1)
+        self._d.loadTxt.Color     = lodHov and pal.text or pal.textSub
+
+        if savHov and mClick then saveConfig(self._nameVal) end
+        if lodHov and mClick then loadConfig(self._nameVal) end
+
+        local statusY = ppy + panelH - 18
+        self._d.title.Text     = #self._nameVal > 0 and ("name: " .. self._nameVal) or "config name"
+        self._d.title.Position = Vector2.new(ppx + 8, ppy + 7)
+
+        if mClick and not hov and not hit(mx, my, ppx, ppy, pw, panelH) then
+            self._open = false
         end
     end
 
-    function e:destroy() for _, d in pairs(self._d) do kill(d) end end
+    function e:destroy()
+        for _, d in pairs(self._d) do kill(d) end
+        if iconn then iconn:Disconnect() end
+        if econn then econn:Disconnect() end
+    end
     return e
 end
 
