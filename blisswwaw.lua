@@ -3,11 +3,106 @@ local RS = game:GetService("RunService")
 local GS = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local Stats = game:GetService("Stats")
+local HttpService = game:GetService("HttpService")
 
-local global = (getglobal and getglobal()) or _G
-local bliss_key = tostring(crypt.base64encode(tostring(game.PlaceId)))
+-- ============================================================================
+-- executor api shims
+-- ============================================================================
+local function safecall(fn, ...)
+    if type(fn) ~= "function" then return false end
+    return pcall(fn, ...)
+end
+
+local _getgenv = rawget(getfenv(), "getgenv") or rawget(getfenv(), "getrenv")
+local function getGlobalEnv()
+    if type(_getgenv) == "function" then
+        local ok, env = pcall(_getgenv)
+        if ok and type(env) == "table" then return env end
+    end
+    local gg = rawget(getfenv(), "getglobal")
+    if type(gg) == "function" then
+        local ok, env = pcall(gg)
+        if ok and type(env) == "table" then return env end
+    end
+    return _G
+end
+local global = getGlobalEnv()
+
+local function b64encode(s)
+    local crypt = rawget(getfenv(), "crypt")
+    if type(crypt) == "table" and type(crypt.base64encode) == "function" then
+        local ok, v = pcall(crypt.base64encode, s)
+        if ok and v then return v end
+    end
+    local b64 = rawget(getfenv(), "base64")
+    if type(b64) == "table" and type(b64.encode) == "function" then
+        local ok, v = pcall(b64.encode, s)
+        if ok and v then return v end
+    end
+    local e = rawget(getfenv(), "base64encode")
+    if type(e) == "function" then
+        local ok, v = pcall(e, s)
+        if ok and v then return v end
+    end
+    return s
+end
+
+local _isfolder  = rawget(getfenv(), "isfolder")
+local _makefolder = rawget(getfenv(), "makefolder")
+local _writefile = rawget(getfenv(), "writefile")
+local _readfile  = rawget(getfenv(), "readfile")
+local _listfiles = rawget(getfenv(), "listfiles")
+local _isfile    = rawget(getfenv(), "isfile")
+
+local function hasFileAPI()
+    return type(_isfolder)  == "function"
+       and type(_makefolder) == "function"
+       and type(_writefile) == "function"
+       and type(_readfile)  == "function"
+end
+
+local function safeIsFolder(p)  local ok, v = pcall(_isfolder, p);  return ok and v end
+local function safeMakeFolder(p) pcall(_makefolder, p) end
+local function safeWriteFile(p, data) return pcall(_writefile, p, data) end
+local function safeReadFile(p)  local ok, v = pcall(_readfile, p);  if ok then return v end end
+local function safeIsFile(p)    if type(_isfile) == "function" then local ok, v = pcall(_isfile, p); return ok and v end return true end
+
+local function jsonEncode(t)
+    local ok, v = pcall(function() return HttpService:JSONEncode(t) end)
+    if ok then return v end
+    return "{}"
+end
+local function jsonDecode(s)
+    local ok, v = pcall(function() return HttpService:JSONDecode(s) end)
+    if ok then return v end
+    return {}
+end
+
+if type(Drawing) ~= "table" and type(Drawing) ~= "userdata" then
+    error("[bliss] Drawing library not available in this environment", 2)
+end
+local _DrawingNew = Drawing.new
+if type(_DrawingNew) ~= "function" then
+    error("[bliss] Drawing.new is not a function", 2)
+end
+
+local function safeDraw(kind)
+    local ok, obj = pcall(_DrawingNew, kind)
+    if not ok or not obj then
+        return setmetatable({}, {
+            __index = function() return nil end,
+            __newindex = function() end,
+        })
+    end
+    return obj
+end
+
+-- ============================================================================
+-- singleton cleanup
+-- ============================================================================
+local bliss_key = "bliss_" .. tostring(b64encode(tostring(game.PlaceId)))
 local pb = global[bliss_key]
-if type(pb) == "table" and pb.DestroyAll then
+if type(pb) == "table" and type(pb.DestroyAll) == "function" then
     pcall(function() pb:DestroyAll() end)
 end
 
@@ -91,7 +186,7 @@ local function applyCommon(d, p, defaults)
 end
 
 local function newRect(p)
-    local d = Drawing.new("Square")
+    local d = safeDraw("Square")
     applyCommon(d, p, { ZIndex = 1 })
     setProp(d, "Filled", (p.Filled == nil) and true or p.Filled)
     setProp(d, "Color", p.Color or pal.bg)
@@ -103,7 +198,7 @@ local function newRect(p)
 end
 
 local function newLabel(p)
-    local d = Drawing.new("Text")
+    local d = safeDraw("Text")
     applyCommon(d, p, { ZIndex = 2 })
     setProp(d, "Text", p.Text or "")
     setProp(d, "Size", p.Size or sz.font)
@@ -117,7 +212,7 @@ local function newLabel(p)
 end
 
 local function newLine(p)
-    local d = Drawing.new("Line")
+    local d = safeDraw("Line")
     applyCommon(d, p, { ZIndex = 1 })
     setProp(d, "From", p.From or Vector2.new(0, 0))
     setProp(d, "To", p.To or Vector2.new(0, 0))
@@ -127,7 +222,7 @@ local function newLine(p)
 end
 
 local function newDot(p)
-    local d = Drawing.new("Circle")
+    local d = safeDraw("Circle")
     applyCommon(d, p, { ZIndex = 2 })
     setProp(d, "Filled", (p.Filled == nil) and true or p.Filled)
     setProp(d, "Color", p.Color or pal.accent)
@@ -139,7 +234,7 @@ local function newDot(p)
 end
 
 local function newTri(p)
-    local d = Drawing.new("Triangle")
+    local d = safeDraw("Triangle")
     applyCommon(d, p, { ZIndex = 2 })
     setProp(d, "Filled", (p.Filled == nil) and true or p.Filled)
     setProp(d, "Color", p.Color or pal.text)
@@ -165,6 +260,68 @@ pcall(function()
     insetY = inset.Y or 0
 end)
 
+-- ============================================================================
+-- shared key -> char mapping for textboxes
+-- ============================================================================
+local function getStringForKey(kc)
+    if type(UIS.GetStringForKeyCode) ~= "function" then return nil end
+    local ok, s = pcall(function() return UIS:GetStringForKeyCode(kc) end)
+    if ok and type(s) == "string" and #s == 1 then return s end
+    return nil
+end
+
+local SHIFT_MAP = {
+    ["1"]="!",["2"]="@",["3"]="#",["4"]="$",["5"]="%",
+    ["6"]="^",["7"]="&",["8"]="*",["9"]="(",["0"]=")",
+    ["`"]="~",["-"]="_",["="]="+",["["]="{",["]"]="}",
+    ["\\"]="|",[";"]=":",["'"]='"',[","]="<",["."]=">",["/"]="?",
+}
+
+local SPECIAL_KEYS = {
+    [Enum.KeyCode.Period]       = {".",">"}, [Enum.KeyCode.Comma]        = {",","<"},
+    [Enum.KeyCode.Minus]        = {"-","_"}, [Enum.KeyCode.Equals]       = {"=","+"},
+    [Enum.KeyCode.Slash]        = {"/","?"}, [Enum.KeyCode.Semicolon]    = {";",":"},
+    [Enum.KeyCode.Quote]        = {"'",'"'}, [Enum.KeyCode.LeftBracket]  = {"[","{"},
+    [Enum.KeyCode.RightBracket] = {"]","}"}, [Enum.KeyCode.BackSlash]    = {"\\","|"},
+    [Enum.KeyCode.Backquote]    = {"`","~"},
+    [Enum.KeyCode.One]   = {"1","!"}, [Enum.KeyCode.Two]   = {"2","@"},
+    [Enum.KeyCode.Three] = {"3","#"}, [Enum.KeyCode.Four]  = {"4","$"},
+    [Enum.KeyCode.Five]  = {"5","%"}, [Enum.KeyCode.Six]   = {"6","^"},
+    [Enum.KeyCode.Seven] = {"7","&"}, [Enum.KeyCode.Eight] = {"8","*"},
+    [Enum.KeyCode.Nine]  = {"9","("}, [Enum.KeyCode.Zero]  = {"0",")"},
+}
+
+local LETTER_NAMES = {
+    A=true,B=true,C=true,D=true,E=true,F=true,G=true,H=true,I=true,J=true,
+    K=true,L=true,M=true,N=true,O=true,P=true,Q=true,R=true,S=true,T=true,
+    U=true,V=true,W=true,X=true,Y=true,Z=true,
+}
+
+local function charFromKey(kc, shift)
+    if kc == Enum.KeyCode.Space     then return " " end
+    if kc == Enum.KeyCode.Backspace then return nil end
+    if kc == Enum.KeyCode.Return    then return nil end
+    if kc == Enum.KeyCode.Escape    then return nil end
+
+    local s = getStringForKey(kc)
+    if s then
+        if s:match("%a") then return shift and s:upper() or s:lower() end
+        if s:match("%d") then return shift and (SHIFT_MAP[s] or s) or s end
+        if s:match("%p") then return shift and (SHIFT_MAP[s] or s) or s end
+    end
+
+    local sp = SPECIAL_KEYS[kc]
+    if sp then return shift and sp[2] or sp[1] end
+
+    local n = kc.Name
+    if n and LETTER_NAMES[n] then return shift and n or n:lower() end
+
+    return nil
+end
+
+-- ============================================================================
+-- tooltip
+-- ============================================================================
 local _tooltipDraw = nil
 local function ensureTooltip()
     if _tooltipDraw then return end
@@ -202,6 +359,9 @@ local function hideTooltip()
     _tooltipDraw.txt.Visible = false
 end
 
+-- ============================================================================
+-- load screen
+-- ============================================================================
 local _loadScreen = nil
 local function ensureLoadScreen()
     if _loadScreen then return end
@@ -343,6 +503,9 @@ local function updateLoadScreen(dt, cam)
     end
 end
 
+-- ============================================================================
+-- glow borders
+-- ============================================================================
 local function mkGlowBorder(zBase)
     return {
         g1 = newRect({ Filled = false, Rounding = sz.round + 1,  ZIndex = zBase - 1, Thickness = 3 }),
@@ -385,6 +548,9 @@ local function kill(d)
     end)
 end
 
+-- ============================================================================
+-- notifications
+-- ============================================================================
 local function mkNotif(opts)
     local n = {
         title   = opts.Title or "notification",
@@ -474,6 +640,9 @@ local function updateNotifs(dt, cam)
     end
 end
 
+-- ============================================================================
+-- watermark
+-- ============================================================================
 local function mkWatermark(opts)
     opts = opts or {}
     local wm = {
@@ -564,6 +733,15 @@ local function updateWatermark(wm, dt, cam)
     wm._d.txt.Size      = sz.fontSm
 end
 
+-- ============================================================================
+-- elements
+-- ============================================================================
+local function safeCb(cb, ...)
+    if type(cb) ~= "function" then return end
+    local ok, err = pcall(cb, ...)
+    if not ok then warn("[bliss] callback error: " .. tostring(err)) end
+end
+
 local function mkToggle(o, flags)
     local e = {
         type = "toggle", name = o.Name or "toggle",
@@ -578,7 +756,7 @@ local function mkToggle(o, flags)
     e._d.dot   = newDot({ Radius = 4, ZIndex = 31 })
     e._d.flash = newRect({ Rounding = 3, ZIndex = 32, Transparency = 0 })
 
-    function e:set(v) self.val = v; self.cb(v); if self.flag and flags then flags[self.flag] = v end end
+    function e:set(v) self.val = v; safeCb(self.cb, v); if self.flag and flags then flags[self.flag] = v end end
 
     function e:draw(px, py, w, vis)
         for _, d in pairs(self._d) do d.Visible = vis end
@@ -589,7 +767,7 @@ local function mkToggle(o, flags)
         local rowHit = hit(mx, my, px, py, w, sz.elemH)
         if rowHit and mClick then
             self.val = not self.val
-            self.cb(self.val)
+            safeCb(self.cb, self.val)
             if self.flag and flags then flags[self.flag] = self.val end
             self._flash = 1
         end
@@ -638,7 +816,7 @@ local function mkSlider(o, flags)
     e._d.knob   = newDot({ Radius = 5, ZIndex = 31 })
     e._d.flash  = newRect({ Rounding = 2, ZIndex = 32 })
 
-    function e:set(v) self.val = clamp(snap(v, self.inc), self.min, self.max); self.cb(self.val); if self.flag and flags then flags[self.flag] = self.val end end
+    function e:set(v) self.val = clamp(snap(v, self.inc), self.min, self.max); safeCb(self.cb, self.val); if self.flag and flags then flags[self.flag] = self.val end end
 
     function e:draw(px, py, w, vis)
         for _, d in pairs(self._d) do d.Visible = vis end
@@ -653,7 +831,7 @@ local function mkSlider(o, flags)
         if self._drag then
             local raw = clamp((mx - tx)/tw, 0, 1)
             local nv = clamp(snap(self.min + raw*(self.max-self.min), self.inc), self.min, self.max)
-            if nv ~= self.val then self.val = nv; self.cb(self.val); if self.flag and flags then flags[self.flag] = self.val end end
+            if nv ~= self.val then self.val = nv; safeCb(self.cb, self.val); if self.flag and flags then flags[self.flag] = self.val end end
         end
         self._flash = lerp(self._flash, 0, 0.14)
         self._d.label.Text     = self.name
@@ -700,7 +878,7 @@ local function mkButton(o)
         local bw, bh = w - 8, sz.elemH - 4
         local hov = hit(mx, my, bx, by, bw, bh)
         self._ha = lerp(self._ha, hov and 1 or 0, 0.14)
-        if hov and mClick then self.cb(); self._flash = 1 end
+        if hov and mClick then safeCb(self.cb); self._flash = 1 end
         self._flash = lerp(self._flash, 0, 0.15)
         self._d.bg.Position    = Vector2.new(bx, by); self._d.bg.Size = Vector2.new(bw, bh)
         self._d.bg.Color       = lc(pal.panel, pal.hover, self._ha)
@@ -813,7 +991,7 @@ local function mkDropdown(o, flags)
     end
     buildOpts(e)
 
-    function e:set(v) self.val = v; self.cb(v); if self.flag and flags then flags[self.flag] = v end end
+    function e:set(v) self.val = v; safeCb(self.cb, v); if self.flag and flags then flags[self.flag] = v end end
     function e:refresh(newOpts) self.opts = newOpts; buildOpts(self) end
 
     function e:draw(px, py, w, vis)
@@ -871,7 +1049,7 @@ local function mkDropdown(o, flags)
                     self._od[i].Position = Vector2.new(ox + 6, oy + (ooh - sz.fontSm)/2 - 1)
                     self._od[i].Color    = opt == self.val and pal.accent or (oHov and pal.text or pal.textSub)
                     if oHov and mClick then
-                        self.val = opt; self._open = false; self.cb(opt)
+                        self.val = opt; self._open = false; safeCb(self.cb, opt)
                         if self.flag and flags then flags[self.flag] = opt end
                     end
                 else
@@ -955,7 +1133,7 @@ local function mkKeybind(o, flags)
     table.insert(bliss._connections, UIS.InputBegan:Connect(function(io, gp)
         if gp or e._listen then return end
         if io.UserInputType == Enum.UserInputType.Keyboard and e.val and io.KeyCode == e.val then
-            e.cb()
+            safeCb(e.cb)
         end
     end))
 
@@ -986,60 +1164,7 @@ local function mkTextbox(o, flags)
     e._d.txt    = newLabel({ Size = sz.fontSm, ZIndex = 30 })
     e._d.cur    = newRect({ Rounding = 1, ZIndex = 31 })
 
-    function e:set(v) self.val = v; self.cb(v); if self.flag and flags then flags[self.flag] = v end end
-
-    local function charFromKey(kc, shift)
-        if kc == Enum.KeyCode.Space     then return " " end
-        if kc == Enum.KeyCode.Backspace then return nil end
-        if kc == Enum.KeyCode.Return    then return nil end
-        if kc == Enum.KeyCode.Escape    then return nil end
-
-        local ok, s = pcall(function()
-            return UIS:GetStringForKeyCode(kc)
-        end)
-        if ok and s and #s == 1 then
-            if s:match("%a") then return shift and s:upper() or s:lower() end
-            if s:match("[%d%p]") then
-                if shift then
-                    local sm = {
-                        ["1"]="!",["2"]="@",["3"]="#",["4"]="$",["5"]="%",
-                        ["6"]="^",["7"]="&",["8"]="*",["9"]="(",["0"]=")",
-                        ["`"]="~",["-"]="_",["="]="+",["`"]="~",["["]= "{",
-                        ["]"]="}",["\\"]= "|",[";"]=":",["'"]='"',[","]="<",
-                        ["."]=">", ["/"]="?",
-                    }
-                    return sm[s] or s
-                end
-                return s
-            end
-        end
-
-        local specials = {
-            [Enum.KeyCode.Period]       = {".",">"}, [Enum.KeyCode.Comma]        = {",","<"},
-            [Enum.KeyCode.Minus]        = {"-","_"}, [Enum.KeyCode.Equals]       = {"=","+"},
-            [Enum.KeyCode.Slash]        = {"/","?"}, [Enum.KeyCode.Semicolon]    = {";",":"},
-            [Enum.KeyCode.Quote]        = {"'",'"'}, [Enum.KeyCode.LeftBracket]  = {"[","{"},
-            [Enum.KeyCode.RightBracket] = {"]","}"}, [Enum.KeyCode.BackSlash]    = {"\\","|"},
-            [Enum.KeyCode.Backquote]    = {"`","~"},
-            [Enum.KeyCode.One]   = {"1","!"}, [Enum.KeyCode.Two]   = {"2","@"},
-            [Enum.KeyCode.Three] = {"3","#"}, [Enum.KeyCode.Four]  = {"4","$"},
-            [Enum.KeyCode.Five]  = {"5","%"}, [Enum.KeyCode.Six]   = {"6","^"},
-            [Enum.KeyCode.Seven] = {"7","&"}, [Enum.KeyCode.Eight] = {"8","*"},
-            [Enum.KeyCode.Nine]  = {"9","("}, [Enum.KeyCode.Zero]  = {"0",")"},
-        }
-        local sp = specials[kc]
-        if sp then return shift and sp[2] or sp[1] end
-
-        local letterMap = {
-            A="a",B="b",C="c",D="d",E="e",F="f",G="g",H="h",I="i",J="j",
-            K="k",L="l",M="m",N="n",O="o",P="p",Q="q",R="r",S="s",T="t",
-            U="u",V="v",W="w",X="x",Y="y",Z="z",
-        }
-        local n = kc.Name
-        if n and letterMap[n] then return shift and n or letterMap[n] end
-
-        return nil
-    end
+    function e:set(v) self.val = v; safeCb(self.cb, v); if self.flag and flags then flags[self.flag] = v end end
 
     local function applyKey(kc)
         local shift = UIS:IsKeyDown(Enum.KeyCode.LeftShift) or UIS:IsKeyDown(Enum.KeyCode.RightShift)
@@ -1067,7 +1192,7 @@ local function mkTextbox(o, flags)
             if io.KeyCode == Enum.KeyCode.Return then
                 e._focus = false
                 bliss._textFocused = false
-                e.cb(e.val)
+                safeCb(e.cb, e.val)
                 if e.flag and flags then flags[e.flag] = e.val end
                 if iconn then iconn:Disconnect(); iconn = nil end
                 if econn then econn:Disconnect(); econn = nil end
@@ -1097,14 +1222,13 @@ local function mkTextbox(o, flags)
 
     local function closeFocus()
         bliss._textFocused = false
-        e.cb(e.val)
+        safeCb(e.cb, e.val)
         if e.flag and flags then flags[e.flag] = e.val end
         if iconn then iconn:Disconnect(); iconn = nil end
         if econn then econn:Disconnect(); econn = nil end
         e._repeatKey = nil
     end
 
-    local _dt = 0
     function e:draw(px, py, w, vis, frameDt)
         for _, d in pairs(self._d) do d.Visible = vis end
         if not vis then return end
@@ -1172,7 +1296,6 @@ local function mkTextbox(o, flags)
         self._d.glow2.Thickness    = 1
         self._d.glow2.Transparency = math.max(0, ga * 0.25)
 
-        local display = #self.val > 0 and self.val or self.ph
         local charW    = 7.8
         local innerW   = bw - 14
         local maxChars = math.floor(innerW / charW)
@@ -1248,7 +1371,7 @@ local function mkColorPicker(o, flags)
     e._d.hBar    = newRect({ Rounding = 2, ZIndex = 61 })
     e._d.hCur    = newRect({ Rounding = 2, ZIndex = 62 })
 
-    function e:set(c) self.val = c; self.cb(c); if self.flag and flags then flags[self.flag] = c end end
+    function e:set(c) self.val = c; safeCb(self.cb, c); if self.flag and flags then flags[self.flag] = c end end
 
     function e:draw(px, py, w, vis)
         for _, d in pairs(self._d) do d.Visible = vis end
@@ -1291,7 +1414,7 @@ local function mkColorPicker(o, flags)
                 self._sat = clamp((mx - sx)/sw, 0, 1)
                 self._bri = 1 - clamp((my - sy)/sh, 0, 1)
                 self.val = Color3.fromHSV(self._hue, self._sat, self._bri)
-                self.cb(self.val); if self.flag and flags then flags[self.flag] = self.val end
+                safeCb(self.cb, self.val); if self.flag and flags then flags[self.flag] = self.val end
             end
             self._d.svDot.Position = Vector2.new(sx + self._sat*sw, sy + (1-self._bri)*sh)
             self._d.svDot.Color    = pal.text
@@ -1304,7 +1427,7 @@ local function mkColorPicker(o, flags)
             if self._dH then
                 self._hue = clamp((my - hy)/hh, 0, 0.999)
                 self.val = Color3.fromHSV(self._hue, self._sat, self._bri)
-                self.cb(self.val); if self.flag and flags then flags[self.flag] = self.val end
+                safeCb(self.cb, self.val); if self.flag and flags then flags[self.flag] = self.val end
             end
             self._d.hCur.Position = Vector2.new(hx - 1, hy + self._hue*hh - 2)
             self._d.hCur.Size     = Vector2.new(10, 4); self._d.hCur.Color = pal.text
@@ -1324,13 +1447,13 @@ end
 local function mkConfigUI(win)
     local closedH  = sz.elemH
     local panelH   = 104
-    local openH    = closedH + 6 + panelH
     local e = {
         type = "config", name = "config",
         h = closedH,
         _open = false, _openA = 0,
         _nameVal = "", _nameFocus = false, _blinkOn = true, _blinkT = 0,
         _repeatKey = nil, _repeatTimer = 0, _repeatDelay = 0,
+        _status = "", _statusT = 0,
         _d = {},
     }
     local z = 80
@@ -1340,6 +1463,7 @@ local function mkConfigUI(win)
     e._d.panel    = newRect({ Rounding = 4, ZIndex = z + 10 })
     e._d.panOut   = newRect({ Filled = false, Rounding = 4, ZIndex = z + 10 })
     e._d.title    = newLabel({ Size = sz.fontXs, ZIndex = z + 11 })
+    e._d.status   = newLabel({ Size = sz.fontXs, ZIndex = z + 11 })
     e._d.inp      = newRect({ Rounding = 3, ZIndex = z + 11 })
     e._d.inpOut   = newRect({ Filled = false, Rounding = 3, ZIndex = z + 11 })
     e._d.inpTxt   = newLabel({ Size = sz.fontXs, ZIndex = z + 12 })
@@ -1351,27 +1475,22 @@ local function mkConfigUI(win)
     e._d.loadBtnO = newRect({ Filled = false, Rounding = 3, ZIndex = z + 11 })
     e._d.loadTxt  = newLabel({ Size = sz.fontXs, Center = true, ZIndex = z + 12 })
 
+    local function applyKey(kc)
+        local shift = UIS:IsKeyDown(Enum.KeyCode.LeftShift) or UIS:IsKeyDown(Enum.KeyCode.RightShift)
+        if kc == Enum.KeyCode.Backspace then
+            if #e._nameVal > 0 then e._nameVal = e._nameVal:sub(1, -2) end
+            return
+        end
+        local ch = charFromKey(kc, shift)
+        if ch then e._nameVal = e._nameVal .. ch end
+    end
+
     local iconn, econn
     local function openInput()
         bliss._textFocused = true
         if iconn then iconn:Disconnect(); iconn = nil end
         if econn then econn:Disconnect(); econn = nil end
         e._repeatKey = nil; e._repeatTimer = 0; e._repeatDelay = 0
-
-        local function applyKey(kc)
-            local shift = UIS:IsKeyDown(Enum.KeyCode.LeftShift) or UIS:IsKeyDown(Enum.KeyCode.RightShift)
-            if kc == Enum.KeyCode.Backspace then
-                if #e._nameVal > 0 then e._nameVal = e._nameVal:sub(1, -2) end
-                return
-            end
-            local n = kc.Name
-            if kc == Enum.KeyCode.Space then e._nameVal = e._nameVal .. " "
-            elseif n and #n == 1 and n:match("%a") then e._nameVal = e._nameVal .. (shift and n:upper() or n:lower())
-            elseif n and #n == 1 and n:match("%d") then e._nameVal = e._nameVal .. n
-            elseif kc == Enum.KeyCode.Minus then e._nameVal = e._nameVal .. (shift and "_" or "-")
-            elseif kc == Enum.KeyCode.Period then e._nameVal = e._nameVal .. "."
-            end
-        end
 
         iconn = UIS.InputBegan:Connect(function(io, gp)
             if not e._nameFocus or gp then return end
@@ -1392,32 +1511,51 @@ local function mkConfigUI(win)
         end)
     end
 
+    local function setStatus(msg)
+        e._status = msg or ""
+        e._statusT = 3
+    end
+
     local function saveConfig(name)
-        if not name or #name == 0 then return end
-        pcall(function()
-            if not isfolder("bliss_configs") then makefolder("bliss_configs") end
-            local data = {}
-            for k, v in pairs(win._flags) do
-                if type(v) == "boolean" or type(v) == "number" or type(v) == "string" then data[k] = v end
+        if not name or #name == 0 then setStatus("name required"); return end
+        if not hasFileAPI() then setStatus("no file api"); return end
+        if not safeIsFolder("bliss_configs") then safeMakeFolder("bliss_configs") end
+        local data = {}
+        for k, v in pairs(win._flags) do
+            local t = type(v)
+            if t == "boolean" or t == "number" or t == "string" then
+                data[k] = v
+            elseif typeof and typeof(v) == "Color3" then
+                data[k] = { _type = "Color3", r = v.R, g = v.G, b = v.B }
+            elseif typeof and typeof(v) == "EnumItem" then
+                data[k] = { _type = "EnumItem", value = tostring(v) }
             end
-            writefile("bliss_configs/" .. name .. ".json", game:GetService("HttpService"):JSONEncode(data))
-        end)
+        end
+        local ok = safeWriteFile("bliss_configs/" .. name .. ".json", jsonEncode(data))
+        setStatus(ok and "saved" or "save failed")
     end
 
     local function loadConfig(name)
-        if not name or #name == 0 then return end
-        pcall(function()
-            local raw  = readfile("bliss_configs/" .. name .. ".json")
-            local data = game:GetService("HttpService"):JSONDecode(raw)
-            for k, v in pairs(data) do
-                win._flags[k] = v
-                for _, tab in ipairs(win._tabs) do
-                    for _, el in ipairs(tab._elems) do
-                        if el.flag == k and el.set then pcall(function() el:set(v) end) end
-                    end
+        if not name or #name == 0 then setStatus("name required"); return end
+        if not hasFileAPI() then setStatus("no file api"); return end
+        local path = "bliss_configs/" .. name .. ".json"
+        if not safeIsFile(path) then setStatus("not found"); return end
+        local raw = safeReadFile(path)
+        if not raw then setStatus("read failed"); return end
+        local data = jsonDecode(raw)
+        if type(data) ~= "table" then setStatus("bad file"); return end
+        for k, v in pairs(data) do
+            if type(v) == "table" and v._type == "Color3" then
+                v = Color3.new(v.r or 1, v.g or 1, v.b or 1)
+            end
+            win._flags[k] = v
+            for _, tab in ipairs(win._tabs) do
+                for _, el in ipairs(tab._elems) do
+                    if el.flag == k and el.set then pcall(function() el:set(v) end) end
                 end
             end
-        end)
+        end
+        setStatus("loaded")
     end
 
     function e:draw(px, py, w, vis, fdt)
@@ -1426,6 +1564,9 @@ local function mkConfigUI(win)
             self.h = closedH
             return
         end
+
+        local frameDt = fdt or (1/60)
+        if self._statusT > 0 then self._statusT = self._statusT - frameDt end
 
         local bx, by = px + 4, py + 2
         local bw, bh = w - 8, sz.elemH - 4
@@ -1481,18 +1622,13 @@ local function mkConfigUI(win)
             end
         end
 
-        local frameDt = fdt or (1/60)
         if self._repeatKey then
             self._repeatTimer = self._repeatTimer + frameDt
             if self._repeatDelay > 0 then
                 if self._repeatTimer >= self._repeatDelay then self._repeatDelay = 0; self._repeatTimer = 0 end
             else
                 if self._repeatTimer >= 0.05 then
-                    local shift = UIS:IsKeyDown(Enum.KeyCode.LeftShift) or UIS:IsKeyDown(Enum.KeyCode.RightShift)
-                    local kc = self._repeatKey
-                    if kc == Enum.KeyCode.Backspace then
-                        if #self._nameVal > 0 then self._nameVal = self._nameVal:sub(1,-2) end
-                    end
+                    applyKey(self._repeatKey)
                     self._repeatTimer = 0
                 end
             end
@@ -1556,9 +1692,14 @@ local function mkConfigUI(win)
         if savHov and mClick then saveConfig(self._nameVal) end
         if lodHov and mClick then loadConfig(self._nameVal) end
 
-        local statusY = ppy + panelH - 18
-        self._d.title.Text     = #self._nameVal > 0 and ("name: " .. self._nameVal) or "config name"
-        self._d.title.Position = Vector2.new(ppx + 8, ppy + 7)
+        if self._statusT > 0 and #self._status > 0 then
+            self._d.status.Visible  = true
+            self._d.status.Text     = self._status
+            self._d.status.Position = Vector2.new(ppx + 8, ppy + panelH - 16)
+            self._d.status.Color    = pal.accent
+        else
+            self._d.status.Visible = false
+        end
 
         if mClick and not hov and not hit(mx, my, ppx, ppy, pw, panelH) then
             self._open = false
@@ -1723,9 +1864,9 @@ local function renderWin(w, dt)
             end
             if eVis then
                 el:draw(cx + 4, ey, cw - 12, true, dt)
-                for _, d in pairs(el._d or {}) do
-                    if elemAlpha < 0.99 then
-                        pcall(function() d.Transparency = math.max(d.Transparency or 1, elemAlpha) end)
+                if elemAlpha < 0.99 then
+                    for _, obj in pairs(el._d or {}) do
+                        pcall(function() obj.Transparency = math.min(obj.Transparency or 1, elemAlpha) end)
                     end
                 end
             else
@@ -1796,9 +1937,9 @@ function bliss.new(opts)
     ensureLoadScreen()
     _loadT      = 0
     _loadDismiss = false
-    _loadReady  = false
-    _loadFading = false
-    _loadFadeT  = 0
+    _loadReady   = false
+    _loadFading  = false
+    _loadFadeT   = 0
 
     if opts.Watermark then
         local wm = opts.Watermark
@@ -1811,7 +1952,6 @@ function bliss.new(opts)
         })
     end
 
-    _loadDismiss = false
     return win
 end
 
@@ -1875,7 +2015,7 @@ function bliss:Destroy(name)
     local w = self._windows[name]
     if not w then return end
     for _, tab in ipairs(w._tabs) do
-        for _, el in ipairs(tab._elems) do if el.destroy then el:destroy() end end
+        for _, el in ipairs(tab._elems) do if el.destroy then pcall(function() el:destroy() end) end end
     end
     for _, d in pairs(w._draw) do kill(d) end
     for _, td in ipairs(w._tabDraw) do for k, d in pairs(td) do if type(d) ~= "number" then kill(d) end end end
@@ -1887,11 +2027,11 @@ end
 
 function bliss:DestroyAll()
     for name in pairs(self._windows) do self:Destroy(name) end
-    for _, c in ipairs(self._connections) do pcall(c.Disconnect, c) end
+    for _, c in ipairs(self._connections) do pcall(function() c:Disconnect() end) end
     self._connections = {}
-    for _, d in pairs(_tooltipDraw or {}) do kill(d) end
-    if _loadScreen then for _, d in pairs(_loadScreen) do kill(d) end end
-    if self._watermark then for _, d in pairs(self._watermark._d) do kill(d) end end
+    if _tooltipDraw then for _, d in pairs(_tooltipDraw) do kill(d) end; _tooltipDraw = nil end
+    if _loadScreen then for _, d in pairs(_loadScreen) do kill(d) end; _loadScreen = nil end
+    if self._watermark then for _, d in pairs(self._watermark._d) do kill(d) end; self._watermark = nil end
 end
 
 table.insert(bliss._connections, UIS.InputChanged:Connect(function(io)
@@ -1919,38 +2059,45 @@ end))
 
 local _lastT = tick()
 table.insert(bliss._connections, RS.RenderStepped:Connect(function()
-    local now = tick()
-    local dt  = math.min(now - _lastT, 0.1)
-    _lastT    = now
+    local ok, err = pcall(function()
+        local now = tick()
+        local dt  = math.min(now - _lastT, 0.1)
+        _lastT    = now
 
-    local ml = UIS:GetMouseLocation()
-    mx, my = ml.X, ml.Y - insetY
+        local ml = UIS:GetMouseLocation()
+        mx, my = ml.X, ml.Y - insetY
 
-    local cam = workspace.CurrentCamera
+        local cam = workspace.CurrentCamera
+        if not cam then return end
 
-    if not bliss._loadDone then
-        updateLoadScreen(dt, cam)
+        if not bliss._loadDone then
+            updateLoadScreen(dt, cam)
+            mClick  = false
+            mScroll = 0
+            return
+        end
+
+        bliss._tooltipText = nil
+        for _, w in pairs(bliss._windows) do
+            renderWin(w, dt)
+        end
+
+        if bliss._tooltipText then
+            drawTooltip(bliss._tooltipText, bliss._tooltipMx or mx, bliss._tooltipMy or my)
+        else
+            hideTooltip()
+        end
+
+        updateNotifs(dt, cam)
+        updateWatermark(bliss._watermark, dt, cam)
+
         mClick  = false
         mScroll = 0
-        return
+    end)
+    if not ok then
+        warn("[bliss] render error: " .. tostring(err))
+        mClick = false; mScroll = 0
     end
-
-    bliss._tooltipText = nil
-    for _, w in pairs(bliss._windows) do
-        renderWin(w, dt)
-    end
-
-    if bliss._tooltipText then
-        drawTooltip(bliss._tooltipText, bliss._tooltipMx or mx, bliss._tooltipMy or my)
-    else
-        hideTooltip()
-    end
-
-    updateNotifs(dt, cam)
-    updateWatermark(bliss._watermark, dt, cam)
-
-    mClick  = false
-    mScroll = 0
 end))
 
 task.spawn(function()
