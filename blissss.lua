@@ -97,6 +97,25 @@ local function safeDraw(kind)
     return obj
 end
 
+-- detect whether Square supports the Rounding property by probing a test object
+local SQUARE_HAS_ROUNDING = false
+do
+    local ok, test = pcall(_DrawingNew, "Square")
+    if ok and test then
+        local okRead = pcall(function() return test.Rounding end)
+        if okRead then
+            local okWrite = pcall(function() test.Rounding = 4 end)
+            if okWrite then
+                local okReadBack, val = pcall(function() return test.Rounding end)
+                if okReadBack and type(val) == "number" and val ~= 0 then
+                    SQUARE_HAS_ROUNDING = true
+                end
+            end
+        end
+        pcall(function() if test.Remove then test:Remove() else test:Destroy() end end)
+    end
+end
+
 -- ============================================================================
 -- singleton cleanup
 -- ============================================================================
@@ -185,7 +204,121 @@ local function applyCommon(d, p, defaults)
     setProp(d, "ZIndex", p.ZIndex or defaults.ZIndex)
 end
 
+-- fake-rounded rect using 1 H-bar + 1 V-bar + 4 corner circles
+-- returns a proxy table with Position/Size/Color/Visible/Transparency/ZIndex
+-- setters that refresh all sub-drawings. used when the executor's Square
+-- drawing doesn't actually honor the Rounding property.
+local function newRoundRect(p)
+    local state = {
+        r      = p.Rounding or sz.round,
+        z      = p.ZIndex or 1,
+        col    = p.Color or pal.bg,
+        vis    = p.Visible or false,
+        trans  = (p.Transparency ~= nil) and p.Transparency or 1,
+        pos    = p.Position or Vector2.new(0, 0),
+        size   = p.Size or Vector2.new(10, 10),
+        thick  = p.Thickness or 1,
+    }
+
+    local hBar = safeDraw("Square")
+    local vBar = safeDraw("Square")
+    local c1   = safeDraw("Circle")
+    local c2   = safeDraw("Circle")
+    local c3   = safeDraw("Circle")
+    local c4   = safeDraw("Circle")
+
+    for _, d in ipairs({ hBar, vBar }) do
+        setProp(d, "Filled", true)
+        setProp(d, "Thickness", state.thick)
+    end
+    for _, d in ipairs({ c1, c2, c3, c4 }) do
+        setProp(d, "Filled", true)
+        setProp(d, "NumSides", 20)
+        setProp(d, "Thickness", state.thick)
+    end
+
+    local parts = { hBar, vBar, c1, c2, c3, c4 }
+
+    local function refresh()
+        local px, py = state.pos.X, state.pos.Y
+        local sx, sy = state.size.X, state.size.Y
+        local rad = math.min(state.r, math.floor(math.min(sx, sy) / 2))
+        if rad < 0 then rad = 0 end
+
+        setProp(hBar, "Position", Vector2.new(px, py + rad))
+        setProp(hBar, "Size",     Vector2.new(sx, math.max(0, sy - rad * 2)))
+
+        setProp(vBar, "Position", Vector2.new(px + rad, py))
+        setProp(vBar, "Size",     Vector2.new(math.max(0, sx - rad * 2), sy))
+
+        setProp(c1, "Position", Vector2.new(px + rad,       py + rad))
+        setProp(c2, "Position", Vector2.new(px + sx - rad,  py + rad))
+        setProp(c3, "Position", Vector2.new(px + rad,       py + sy - rad))
+        setProp(c4, "Position", Vector2.new(px + sx - rad,  py + sy - rad))
+        for _, c in ipairs({ c1, c2, c3, c4 }) do
+            setProp(c, "Radius", rad)
+        end
+
+        for _, d in ipairs(parts) do
+            setProp(d, "Color", state.col)
+            setProp(d, "Visible", state.vis)
+            setProp(d, "Transparency", state.trans)
+            setProp(d, "ZIndex", state.z)
+        end
+    end
+
+    refresh()
+
+    local proxy = setmetatable({ __bliss_round = true }, {
+        __index = function(_, k)
+            if k == "Position"     then return state.pos   end
+            if k == "Size"         then return state.size  end
+            if k == "Color"        then return state.col   end
+            if k == "Visible"      then return state.vis   end
+            if k == "Transparency" then return state.trans end
+            if k == "Rounding"     then return state.r     end
+            if k == "ZIndex"       then return state.z     end
+            if k == "Thickness"    then return state.thick end
+            if k == "Filled"       then return true        end
+            if k == "Remove" or k == "Destroy" then
+                return function()
+                    for _, d in ipairs(parts) do
+                        pcall(function()
+                            if d.Remove then d:Remove()
+                            elseif d.Destroy then d:Destroy() end
+                        end)
+                    end
+                end
+            end
+        end,
+        __newindex = function(_, k, v)
+            if     k == "Position"     then state.pos   = v
+            elseif k == "Size"         then state.size  = v
+            elseif k == "Color"        then state.col   = v
+            elseif k == "Visible"      then state.vis   = v
+            elseif k == "Transparency" then state.trans = v
+            elseif k == "Rounding"     then state.r     = v
+            elseif k == "ZIndex"       then state.z     = v
+            elseif k == "Thickness"    then state.thick = v; for _, d in ipairs(parts) do setProp(d, "Thickness", v) end
+            elseif k == "Filled"       then return
+            else return end
+            refresh()
+        end,
+    })
+    return proxy
+end
+
 local function newRect(p)
+    -- use the fake-rounded path only when:
+    --   - the executor's native Square doesn't honor Rounding
+    --   - a nonzero rounding was requested
+    --   - the square is filled (outlined rounded rects would need arcs we can't draw)
+    if not SQUARE_HAS_ROUNDING
+       and p.Rounding and p.Rounding > 0
+       and (p.Filled == nil or p.Filled)
+    then
+        return newRoundRect(p)
+    end
     local d = safeDraw("Square")
     applyCommon(d, p, { ZIndex = 1 })
     setProp(d, "Filled", (p.Filled == nil) and true or p.Filled)
