@@ -500,15 +500,15 @@ local function ensureLoadScreen()
     if _loadScreen then return end
     _loadScreen = {
         bg     = newRect({ ZIndex = 999, Color = pal.bgDeep }),
-        panel  = newRect({ ZIndex = 1000, Rounding = 8 }),
-        panOut = newRect({ ZIndex = 1000, Filled = false, Rounding = 8 }),
-        bar    = newRect({ ZIndex = 1001, Rounding = 4 }),
-        barBg  = newRect({ ZIndex = 1000, Rounding = 4 }),
-        txt    = newLabel({ ZIndex = 1002, Size = sz.font }),
-        sub    = newLabel({ ZIndex = 1002, Size = sz.fontXs, Color = pal.textDim }),
-        dot1   = newDot({ ZIndex = 1002, Radius = 3, NumSides = 16 }),
-        dot2   = newDot({ ZIndex = 1002, Radius = 3, NumSides = 16 }),
-        dot3   = newDot({ ZIndex = 1002, Radius = 3, NumSides = 16 }),
+        panOut = newRect({ ZIndex = 1000, Filled = true, Rounding = 9 }),
+        panel  = newRect({ ZIndex = 1001, Filled = true, Rounding = 8 }),
+        bar    = newRect({ ZIndex = 1003, Rounding = 4 }),
+        barBg  = newRect({ ZIndex = 1002, Rounding = 4 }),
+        txt    = newLabel({ ZIndex = 1004, Size = sz.font }),
+        sub    = newLabel({ ZIndex = 1004, Size = sz.fontXs, Color = pal.textDim }),
+        dot1   = newDot({ ZIndex = 1004, Radius = 3, NumSides = 16 }),
+        dot2   = newDot({ ZIndex = 1004, Radius = 3, NumSides = 16 }),
+        dot3   = newDot({ ZIndex = 1004, Radius = 3, NumSides = 16 }),
         glowL1 = newRect({ ZIndex = 998, Rounding = 10, Filled = true }),
         glowL2 = newRect({ ZIndex = 997, Rounding = 14, Filled = true }),
         glowL3 = newRect({ ZIndex = 996, Rounding = 18, Filled = true }),
@@ -580,17 +580,17 @@ local function updateLoadScreen(dt, cam)
     setGlow(_loadScreen.glowL2, 8,  glowA * 0.55)
     setGlow(_loadScreen.glowL1, 3,  glowA * 0.8)
 
+    _loadScreen.panOut.Visible      = true
+    _loadScreen.panOut.Position     = Vector2.new(cx - pw/2 - 1, panY - 1)
+    _loadScreen.panOut.Size         = Vector2.new(pw + 2, ph + 2)
+    _loadScreen.panOut.Color        = pal.border
+    _loadScreen.panOut.Transparency = slideIn
+
     _loadScreen.panel.Visible      = true
     _loadScreen.panel.Position     = Vector2.new(cx - pw/2, panY)
     _loadScreen.panel.Size         = Vector2.new(pw, ph)
     _loadScreen.panel.Color        = pal.panel
     _loadScreen.panel.Transparency = slideIn
-
-    _loadScreen.panOut.Visible      = true
-    _loadScreen.panOut.Position     = Vector2.new(cx - pw/2, panY)
-    _loadScreen.panOut.Size         = Vector2.new(pw, ph)
-    _loadScreen.panOut.Color        = pal.border
-    _loadScreen.panOut.Transparency = slideIn
 
     _loadScreen.txt.Visible      = slideIn > 0.5
     _loadScreen.txt.Text         = "bliss"
