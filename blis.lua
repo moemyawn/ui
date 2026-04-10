@@ -640,23 +640,27 @@ end
 -- glow borders
 -- ============================================================================
 local function mkGlowBorder(zBase)
+    -- use FILLED rounded rects stacked behind the target. each layer is slightly
+    -- larger than the last with low opacity, producing a soft rounded halo.
+    -- this works whether or not the executor supports native rounding, because
+    -- newRect will route through newRoundRect when needed.
     return {
-        g1 = newRect({ Filled = false, Rounding = sz.round + 1,  ZIndex = zBase - 1, Thickness = 3 }),
-        g2 = newRect({ Filled = false, Rounding = sz.round + 3,  ZIndex = zBase - 2, Thickness = 2 }),
-        g3 = newRect({ Filled = false, Rounding = sz.round + 6,  ZIndex = zBase - 3, Thickness = 2 }),
-        g4 = newRect({ Filled = false, Rounding = sz.round + 10, ZIndex = zBase - 4, Thickness = 1 }),
-        g5 = newRect({ Filled = false, Rounding = sz.round + 15, ZIndex = zBase - 5, Thickness = 1 }),
+        g1 = newRect({ Filled = true, Rounding = sz.round + 2,  ZIndex = zBase - 1 }),
+        g2 = newRect({ Filled = true, Rounding = sz.round + 4,  ZIndex = zBase - 2 }),
+        g3 = newRect({ Filled = true, Rounding = sz.round + 7,  ZIndex = zBase - 3 }),
+        g4 = newRect({ Filled = true, Rounding = sz.round + 11, ZIndex = zBase - 4 }),
+        g5 = newRect({ Filled = true, Rounding = sz.round + 16, ZIndex = zBase - 5 }),
     }
 end
 
 local function drawGlowBorder(g, px, py, ww, wh, col, strength)
     local s = strength or 0.18
     local layers = {
-        { g.g1, 1,  s * 0.92 },
-        { g.g2, 4,  s * 0.65 },
-        { g.g3, 8,  s * 0.40 },
-        { g.g4, 13, s * 0.20 },
-        { g.g5, 19, s * 0.08 },
+        { g.g1, 2,  s * 0.55 },
+        { g.g2, 5,  s * 0.38 },
+        { g.g3, 9,  s * 0.24 },
+        { g.g4, 14, s * 0.14 },
+        { g.g5, 20, s * 0.06 },
     }
     for _, layer in ipairs(layers) do
         local d, pad, alpha = layer[1], layer[2], layer[3]
@@ -1920,14 +1924,14 @@ local function renderWin(w, dt)
     local alpha = w._visA
     local d = w._draw
 
+    d.bgOut.Visible = true; d.bgOut.Position = Vector2.new(p.X - 1, p.Y - 1); d.bgOut.Size = Vector2.new(ww + 2, wh + 2); d.bgOut.Color = pal.border; d.bgOut.Transparency = alpha
     d.bg.Visible    = true; d.bg.Position = p; d.bg.Size = Vector2.new(ww, wh); d.bg.Color = pal.bg; d.bg.Transparency = alpha
-    d.bgOut.Visible = true; d.bgOut.Position = p; d.bgOut.Size = Vector2.new(ww, wh); d.bgOut.Color = pal.border; d.bgOut.Transparency = alpha
     d.title.Visible = true; d.title.Position = p; d.title.Size = Vector2.new(ww, sz.titleH); d.title.Color = pal.panel; d.title.Transparency = alpha
-    d.titleDiv.Visible = true; d.titleDiv.From = Vector2.new(p.X, p.Y + sz.titleH); d.titleDiv.To = Vector2.new(p.X + ww, p.Y + sz.titleH); d.titleDiv.Transparency = alpha
+    d.titleDiv.Visible = true; d.titleDiv.From = Vector2.new(p.X + sz.round, p.Y + sz.titleH); d.titleDiv.To = Vector2.new(p.X + ww - sz.round, p.Y + sz.titleH); d.titleDiv.Transparency = alpha
     d.dot.Visible   = true; d.dot.Position = Vector2.new(p.X + 13, p.Y + sz.titleH/2); d.dot.Transparency = alpha
     d.name.Visible  = true; d.name.Position = Vector2.new(p.X + 24, p.Y + (sz.titleH - sz.font)/2 - 1); d.name.Text = w._name; d.name.Transparency = alpha
     d.slogan.Visible = true; d.slogan.Position = Vector2.new(p.X + ww - 72, p.Y + (sz.titleH - sz.fontXs)/2); d.slogan.Transparency = alpha
-    d.side.Visible  = true; d.side.Position = Vector2.new(p.X, p.Y + sz.titleH); d.side.Size = Vector2.new(sz.tabW, wh - sz.titleH); d.side.Color = pal.bgDeep; d.side.Transparency = alpha
+    d.side.Visible  = true; d.side.Position = Vector2.new(p.X, p.Y + sz.titleH - sz.round); d.side.Size = Vector2.new(sz.tabW, wh - sz.titleH + sz.round); d.side.Color = pal.bgDeep; d.side.Transparency = alpha
     d.sideDiv.Visible = true; d.sideDiv.From = Vector2.new(p.X + sz.tabW, p.Y + sz.titleH); d.sideDiv.To = Vector2.new(p.X + sz.tabW, p.Y + wh); d.sideDiv.Transparency = alpha
 
     w._glowPulse = (w._glowPulse or 0) + dt * 1.8
@@ -2040,14 +2044,14 @@ function bliss.new(opts)
     end
 
     local d = {
-        bg         = newRect({ Rounding = sz.round, ZIndex = 1 }),
-        bgOut      = newRect({ Filled = false, Rounding = sz.round, ZIndex = 1 }),
-        title      = newRect({ ZIndex = 2 }),
+        bg         = newRect({ Rounding = sz.round, ZIndex = 2, Filled = true }),
+        bgOut      = newRect({ Rounding = sz.round + 1, ZIndex = 1, Filled = true }),
+        title      = newRect({ Rounding = sz.round, ZIndex = 4, Filled = true }),
         titleDiv   = newLine({ Color = pal.borderDim, ZIndex = 3 }),
         dot        = newDot({ Color = pal.accent, Radius = 3, NumSides = 16, ZIndex = 4 }),
         name       = newLabel({ Color = pal.text, Size = sz.font, ZIndex = 4 }),
         slogan     = newLabel({ Text = "stay blissful!", Color = pal.textDim, Size = sz.fontXs, Font = 3, ZIndex = 4 }),
-        side       = newRect({ ZIndex = 2 }),
+        side       = newRect({ ZIndex = 3, Rounding = sz.round, Filled = true }),
         sideDiv    = newLine({ Color = pal.borderDim, ZIndex = 3 }),
         contentDiv = newLine({ Color = pal.borderDim, ZIndex = 3, Transparency = 0.5 }),
         scroll     = newRect({ Color = pal.borderDim, Rounding = 2, ZIndex = 25 }),
