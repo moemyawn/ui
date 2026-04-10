@@ -5,6 +5,9 @@ local Players = game:GetService("Players")
 local Stats = game:GetService("Stats")
 local HttpService = game:GetService("HttpService")
 
+-- ============================================================================
+-- executor api shims
+-- ============================================================================
 local function safecall(fn, ...)
     if type(fn) ~= "function" then return false end
     return pcall(fn, ...)
@@ -94,6 +97,9 @@ local function safeDraw(kind)
     return obj
 end
 
+-- ============================================================================
+-- singleton cleanup
+-- ============================================================================
 local bliss_key = "bliss_" .. tostring(b64encode(tostring(game.PlaceId)))
 local pb = global[bliss_key]
 if type(pb) == "table" and type(pb.DestroyAll) == "function" then
@@ -313,6 +319,9 @@ local function charFromKey(kc, shift)
     return nil
 end
 
+-- ============================================================================
+-- tooltip
+-- ============================================================================
 local _tooltipDraw = nil
 local function ensureTooltip()
     if _tooltipDraw then return end
@@ -350,6 +359,9 @@ local function hideTooltip()
     _tooltipDraw.txt.Visible = false
 end
 
+-- ============================================================================
+-- load screen
+-- ============================================================================
 local _loadScreen = nil
 local function ensureLoadScreen()
     if _loadScreen then return end
@@ -491,6 +503,9 @@ local function updateLoadScreen(dt, cam)
     end
 end
 
+-- ============================================================================
+-- glow borders
+-- ============================================================================
 local function mkGlowBorder(zBase)
     return {
         g1 = newRect({ Filled = false, Rounding = sz.round + 1,  ZIndex = zBase - 1, Thickness = 3 }),
@@ -533,6 +548,9 @@ local function kill(d)
     end)
 end
 
+-- ============================================================================
+-- notifications
+-- ============================================================================
 local function mkNotif(opts)
     local n = {
         title   = opts.Title or "notification",
@@ -622,6 +640,9 @@ local function updateNotifs(dt, cam)
     end
 end
 
+-- ============================================================================
+-- watermark
+-- ============================================================================
 local function mkWatermark(opts)
     opts = opts or {}
     local wm = {
@@ -712,6 +733,9 @@ local function updateWatermark(wm, dt, cam)
     wm._d.txt.Size      = sz.fontSm
 end
 
+-- ============================================================================
+-- elements
+-- ============================================================================
 local function safeCb(cb, ...)
     if type(cb) ~= "function" then return end
     local ok, err = pcall(cb, ...)
