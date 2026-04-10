@@ -173,7 +173,7 @@ local sz = {
     font       = 15,
     fontSm     = 13,
     fontXs     = 11,
-    round      = 4,
+    round      = 6,
     sliderH    = 4,
     toggleW    = 34,
     toggleH    = 16,
@@ -459,8 +459,8 @@ local _tooltipDraw = nil
 local function ensureTooltip()
     if _tooltipDraw then return end
     _tooltipDraw = {
-        bg  = newRect({ Rounding = 3, ZIndex = 200 }),
-        out = newRect({ Filled = false, Rounding = 3, ZIndex = 200 }),
+        bg  = newRect({ Rounding = 5, ZIndex = 200 }),
+        out = newRect({ Filled = false, Rounding = 5, ZIndex = 200 }),
         txt = newLabel({ Size = sz.fontXs, ZIndex = 201, Outline = true }),
     }
 end
@@ -500,18 +500,18 @@ local function ensureLoadScreen()
     if _loadScreen then return end
     _loadScreen = {
         bg     = newRect({ ZIndex = 999, Color = pal.bgDeep }),
-        panel  = newRect({ ZIndex = 1000, Rounding = 6 }),
-        panOut = newRect({ ZIndex = 1000, Filled = false, Rounding = 6 }),
-        bar    = newRect({ ZIndex = 1001, Rounding = 2 }),
-        barBg  = newRect({ ZIndex = 1000, Rounding = 2 }),
+        panel  = newRect({ ZIndex = 1000, Rounding = 8 }),
+        panOut = newRect({ ZIndex = 1000, Filled = false, Rounding = 8 }),
+        bar    = newRect({ ZIndex = 1001, Rounding = 4 }),
+        barBg  = newRect({ ZIndex = 1000, Rounding = 4 }),
         txt    = newLabel({ ZIndex = 1002, Size = sz.font }),
         sub    = newLabel({ ZIndex = 1002, Size = sz.fontXs, Color = pal.textDim }),
         dot1   = newDot({ ZIndex = 1002, Radius = 3, NumSides = 16 }),
         dot2   = newDot({ ZIndex = 1002, Radius = 3, NumSides = 16 }),
         dot3   = newDot({ ZIndex = 1002, Radius = 3, NumSides = 16 }),
-        glowL1 = newRect({ ZIndex = 998, Rounding = 8, Filled = true }),
-        glowL2 = newRect({ ZIndex = 997, Rounding = 12, Filled = true }),
-        glowL3 = newRect({ ZIndex = 996, Rounding = 16, Filled = true }),
+        glowL1 = newRect({ ZIndex = 998, Rounding = 10, Filled = true }),
+        glowL2 = newRect({ ZIndex = 997, Rounding = 14, Filled = true }),
+        glowL3 = newRect({ ZIndex = 996, Rounding = 18, Filled = true }),
     }
 end
 local _loadT       = 0
@@ -615,14 +615,14 @@ local function updateLoadScreen(dt, cam)
     _loadScreen.barBg.Position     = Vector2.new(barX, barY)
     _loadScreen.barBg.Size         = Vector2.new(barW, 4)
     _loadScreen.barBg.Color        = pal.borderDim
-    _loadScreen.barBg.Rounding     = 2
+    _loadScreen.barBg.Rounding = 4
     _loadScreen.barBg.Transparency = math.min(1, (slideIn - 0.4) * 1.7)
 
     _loadScreen.bar.Visible      = slideIn > 0.4
     _loadScreen.bar.Position     = Vector2.new(barX, barY)
     _loadScreen.bar.Size         = Vector2.new(math.max(4, barW * prog), 4)
     _loadScreen.bar.Color        = pal.accent
-    _loadScreen.bar.Rounding     = 2
+    _loadScreen.bar.Rounding = 4
     _loadScreen.bar.Transparency = math.min(1, (slideIn - 0.4) * 1.7)
 
     local dotY = panY + 80
@@ -700,13 +700,13 @@ local function mkNotif(opts)
         _d      = {},
     }
     local z = 150
-    n._d.bg     = newRect({ Rounding = 4, ZIndex = z })
-    n._d.bgOut  = newRect({ Filled = false, Rounding = 4, ZIndex = z })
-    n._d.accent = newRect({ Rounding = 2, ZIndex = z + 1 })
+    n._d.bg     = newRect({ Rounding = 6, ZIndex = z })
+    n._d.bgOut  = newRect({ Filled = false, Rounding = 6, ZIndex = z })
+    n._d.accent = newRect({ Rounding = 4, ZIndex = z + 1 })
     n._d.title  = newLabel({ Size = sz.fontSm, ZIndex = z + 2 })
     n._d.msg    = newLabel({ Size = sz.fontXs, ZIndex = z + 2 })
-    n._d.g1     = newRect({ Filled = false, Rounding = 6, ZIndex = z - 1 })
-    n._d.g2     = newRect({ Filled = false, Rounding = 9, ZIndex = z - 2 })
+    n._d.g1     = newRect({ Filled = false, Rounding = 8, ZIndex = z - 1 })
+    n._d.g2     = newRect({ Filled = false, Rounding = 11, ZIndex = z - 2 })
     return n
 end
 
@@ -792,14 +792,14 @@ local function mkWatermark(opts)
         _pulse  = 0,
     }
     local z = 120
-    wm._d.bg    = newRect({ Rounding = 5, ZIndex = z })
-    wm._d.bgOut = newRect({ Filled = false, Rounding = 5, ZIndex = z })
-    wm._d.accent = newRect({ Rounding = 3, ZIndex = z + 1 })
+    wm._d.bg    = newRect({ Rounding = 7, ZIndex = z })
+    wm._d.bgOut = newRect({ Filled = false, Rounding = 7, ZIndex = z })
+    wm._d.accent = newRect({ Rounding = 5, ZIndex = z + 1 })
     wm._d.txt   = newLabel({ Size = sz.fontSm, ZIndex = z + 2 })
-    wm._d.g1    = newRect({ Filled = false, Rounding = 7,  ZIndex = z - 1, Thickness = 3 })
-    wm._d.g2    = newRect({ Filled = false, Rounding = 10, ZIndex = z - 2, Thickness = 2 })
-    wm._d.g3    = newRect({ Filled = false, Rounding = 14, ZIndex = z - 3, Thickness = 1 })
-    wm._d.g4    = newRect({ Filled = false, Rounding = 19, ZIndex = z - 4, Thickness = 1 })
+    wm._d.g1    = newRect({ Filled = false, Rounding = 9,  ZIndex = z - 1, Thickness = 3 })
+    wm._d.g2    = newRect({ Filled = false, Rounding = 12, ZIndex = z - 2, Thickness = 2 })
+    wm._d.g3    = newRect({ Filled = false, Rounding = 16, ZIndex = z - 3, Thickness = 1 })
+    wm._d.g4    = newRect({ Filled = false, Rounding = 21, ZIndex = z - 4, Thickness = 1 })
     return wm
 end
 
@@ -887,11 +887,11 @@ local function mkToggle(o, flags)
         h = sz.elemH, _a = 0, _flash = 0, _d = {},
     }
     e._d.label = newLabel({ Size = sz.font, ZIndex = 30 })
-    e._d.bg    = newRect({ Rounding = 3, ZIndex = 28 })
-    e._d.bgOut = newRect({ Filled = false, Rounding = 3, ZIndex = 28 })
-    e._d.fill  = newRect({ Rounding = 3, ZIndex = 29, Transparency = 0.35 })
+    e._d.bg    = newRect({ Rounding = 5, ZIndex = 28 })
+    e._d.bgOut = newRect({ Filled = false, Rounding = 5, ZIndex = 28 })
+    e._d.fill  = newRect({ Rounding = 5, ZIndex = 29, Transparency = 0.35 })
     e._d.dot   = newDot({ Radius = 4, ZIndex = 31 })
-    e._d.flash = newRect({ Rounding = 3, ZIndex = 32, Transparency = 0 })
+    e._d.flash = newRect({ Rounding = 5, ZIndex = 32, Transparency = 0 })
 
     function e:set(v) self.val = v; safeCb(self.cb, v); if self.flag and flags then flags[self.flag] = v end end
 
@@ -948,10 +948,10 @@ local function mkSlider(o, flags)
     }
     e._d.label  = newLabel({ Size = sz.font, ZIndex = 30 })
     e._d.valTxt = newLabel({ Size = sz.fontSm, Color = pal.accent, ZIndex = 30 })
-    e._d.track  = newRect({ Rounding = 2, ZIndex = 28 })
-    e._d.fill   = newRect({ Rounding = 2, ZIndex = 29 })
+    e._d.track  = newRect({ Rounding = 4, ZIndex = 28 })
+    e._d.fill   = newRect({ Rounding = 4, ZIndex = 29 })
     e._d.knob   = newDot({ Radius = 5, ZIndex = 31 })
-    e._d.flash  = newRect({ Rounding = 2, ZIndex = 32 })
+    e._d.flash  = newRect({ Rounding = 4, ZIndex = 32 })
 
     function e:set(v) self.val = clamp(snap(v, self.inc), self.min, self.max); safeCb(self.cb, self.val); if self.flag and flags then flags[self.flag] = self.val end end
 
@@ -1002,11 +1002,11 @@ local function mkButton(o)
         tooltip = o.Tooltip,
         h = sz.elemH, _ha = 0, _flash = 0, _d = {},
     }
-    e._d.bg    = newRect({ Rounding = 3, ZIndex = 28 })
-    e._d.bgOut = newRect({ Filled = false, Rounding = 3, ZIndex = 28 })
+    e._d.bg    = newRect({ Rounding = 5, ZIndex = 28 })
+    e._d.bgOut = newRect({ Filled = false, Rounding = 5, ZIndex = 28 })
     e._d.label = newLabel({ Size = sz.font, Center = true, ZIndex = 30 })
-    e._d.flash = newRect({ Rounding = 3, ZIndex = 31 })
-    e._d.glow  = newRect({ Filled = false, Rounding = 5, ZIndex = 27 })
+    e._d.flash = newRect({ Rounding = 5, ZIndex = 31 })
+    e._d.glow  = newRect({ Filled = false, Rounding = 7, ZIndex = 27 })
 
     function e:draw(px, py, w, vis)
         for _, d in pairs(self._d) do d.Visible = vis end
@@ -1082,7 +1082,7 @@ end
 
 local function mkSectionHeader(o)
     local e = { type = "section", name = o.Name or "", h = 22, _d = {} }
-    e._d.bg    = newRect({ ZIndex = 27, Rounding = 2 })
+    e._d.bg    = newRect({ ZIndex = 27, Rounding = 4 })
     e._d.label = newLabel({ Size = sz.fontXs, ZIndex = 30, Font = 2 })
     e._d.line  = newLine({ ZIndex = 28 })
     function e:draw(px, py, w, vis)
@@ -1112,18 +1112,18 @@ local function mkDropdown(o, flags)
     }
     e._d.label  = newLabel({ Size = sz.font, ZIndex = 30 })
     e._d.valTxt = newLabel({ Size = sz.fontSm, ZIndex = 30 })
-    e._d.box    = newRect({ Rounding = 3, ZIndex = 28 })
-    e._d.boxOut = newRect({ Filled = false, Rounding = 3, ZIndex = 28 })
+    e._d.box    = newRect({ Rounding = 5, ZIndex = 28 })
+    e._d.boxOut = newRect({ Filled = false, Rounding = 5, ZIndex = 28 })
     e._d.arrow  = newTri({ ZIndex = 30 })
-    e._d.panBg  = newRect({ Rounding = 3, ZIndex = 60 })
-    e._d.panOut = newRect({ Filled = false, Rounding = 3, ZIndex = 60 })
+    e._d.panBg  = newRect({ Rounding = 5, ZIndex = 60 })
+    e._d.panOut = newRect({ Filled = false, Rounding = 5, ZIndex = 60 })
 
     local function buildOpts(self)
         for i = 1, #self._od do kill(self._od[i]); kill(self._ob[i]) end
         self._od, self._ob = {}, {}
         for i = 1, #self.opts do
             self._od[i] = newLabel({ Size = sz.fontSm, ZIndex = 62 })
-            self._ob[i] = newRect({ Rounding = 2, ZIndex = 61 })
+            self._ob[i] = newRect({ Rounding = 4, ZIndex = 61 })
         end
     end
     buildOpts(e)
@@ -1219,8 +1219,8 @@ local function mkKeybind(o, flags)
         h = sz.elemH, _listen = false, _d = {},
     }
     e._d.label  = newLabel({ Size = sz.font, ZIndex = 30 })
-    e._d.bg     = newRect({ Rounding = 3, ZIndex = 28 })
-    e._d.bgOut  = newRect({ Filled = false, Rounding = 3, ZIndex = 28 })
+    e._d.bg     = newRect({ Rounding = 5, ZIndex = 28 })
+    e._d.bgOut  = newRect({ Filled = false, Rounding = 5, ZIndex = 28 })
     e._d.keyTxt = newLabel({ Size = sz.fontXs, Center = true, ZIndex = 30 })
 
     local kconn
@@ -1294,12 +1294,12 @@ local function mkTextbox(o, flags)
         _repeatKey = nil, _repeatTimer = 0, _repeatDelay = 0,
     }
     e._d.label  = newLabel({ Size = sz.font, ZIndex = 30 })
-    e._d.bg     = newRect({ Rounding = 3, ZIndex = 28 })
-    e._d.bgOut  = newRect({ Filled = false, Rounding = 3, ZIndex = 28 })
-    e._d.glow1  = newRect({ Filled = false, Rounding = 5, ZIndex = 27 })
-    e._d.glow2  = newRect({ Filled = false, Rounding = 7, ZIndex = 26 })
+    e._d.bg     = newRect({ Rounding = 5, ZIndex = 28 })
+    e._d.bgOut  = newRect({ Filled = false, Rounding = 5, ZIndex = 28 })
+    e._d.glow1  = newRect({ Filled = false, Rounding = 7, ZIndex = 27 })
+    e._d.glow2  = newRect({ Filled = false, Rounding = 9, ZIndex = 26 })
     e._d.txt    = newLabel({ Size = sz.fontSm, ZIndex = 30 })
-    e._d.cur    = newRect({ Rounding = 1, ZIndex = 31 })
+    e._d.cur    = newRect({ Rounding = 2, ZIndex = 31 })
 
     function e:set(v) self.val = v; safeCb(self.cb, v); if self.flag and flags then flags[self.flag] = v end end
 
@@ -1499,14 +1499,14 @@ local function mkColorPicker(o, flags)
     end
 
     e._d.label   = newLabel({ Size = sz.font, ZIndex = 30 })
-    e._d.prev    = newRect({ Rounding = 3, ZIndex = 28 })
-    e._d.prevOut = newRect({ Filled = false, Rounding = 3, ZIndex = 28 })
-    e._d.panBg   = newRect({ Rounding = 4, ZIndex = 60 })
-    e._d.panOut  = newRect({ Filled = false, Rounding = 4, ZIndex = 60 })
-    e._d.svBox   = newRect({ Rounding = 2, ZIndex = 61 })
+    e._d.prev    = newRect({ Rounding = 5, ZIndex = 28 })
+    e._d.prevOut = newRect({ Filled = false, Rounding = 5, ZIndex = 28 })
+    e._d.panBg   = newRect({ Rounding = 6, ZIndex = 60 })
+    e._d.panOut  = newRect({ Filled = false, Rounding = 6, ZIndex = 60 })
+    e._d.svBox   = newRect({ Rounding = 4, ZIndex = 61 })
     e._d.svDot   = newDot({ Filled = false, Radius = 4, Thickness = 2, ZIndex = 63 })
-    e._d.hBar    = newRect({ Rounding = 2, ZIndex = 61 })
-    e._d.hCur    = newRect({ Rounding = 2, ZIndex = 62 })
+    e._d.hBar    = newRect({ Rounding = 4, ZIndex = 61 })
+    e._d.hCur    = newRect({ Rounding = 4, ZIndex = 62 })
 
     function e:set(c) self.val = c; safeCb(self.cb, c); if self.flag and flags then flags[self.flag] = c end end
 
@@ -1594,22 +1594,22 @@ local function mkConfigUI(win)
         _d = {},
     }
     local z = 80
-    e._d.btn      = newRect({ Rounding = 3, ZIndex = z })
-    e._d.btnOut   = newRect({ Filled = false, Rounding = 3, ZIndex = z })
+    e._d.btn      = newRect({ Rounding = 5, ZIndex = z })
+    e._d.btnOut   = newRect({ Filled = false, Rounding = 5, ZIndex = z })
     e._d.btnTxt   = newLabel({ Size = sz.fontSm, Center = true, ZIndex = z + 1 })
-    e._d.panel    = newRect({ Rounding = 4, ZIndex = z + 10 })
-    e._d.panOut   = newRect({ Filled = false, Rounding = 4, ZIndex = z + 10 })
+    e._d.panel    = newRect({ Rounding = 6, ZIndex = z + 10 })
+    e._d.panOut   = newRect({ Filled = false, Rounding = 6, ZIndex = z + 10 })
     e._d.title    = newLabel({ Size = sz.fontXs, ZIndex = z + 11 })
     e._d.status   = newLabel({ Size = sz.fontXs, ZIndex = z + 11 })
-    e._d.inp      = newRect({ Rounding = 3, ZIndex = z + 11 })
-    e._d.inpOut   = newRect({ Filled = false, Rounding = 3, ZIndex = z + 11 })
+    e._d.inp      = newRect({ Rounding = 5, ZIndex = z + 11 })
+    e._d.inpOut   = newRect({ Filled = false, Rounding = 5, ZIndex = z + 11 })
     e._d.inpTxt   = newLabel({ Size = sz.fontXs, ZIndex = z + 12 })
-    e._d.inpCur   = newRect({ Rounding = 1, ZIndex = z + 13 })
-    e._d.saveBtn  = newRect({ Rounding = 3, ZIndex = z + 11 })
-    e._d.saveBtnO = newRect({ Filled = false, Rounding = 3, ZIndex = z + 11 })
+    e._d.inpCur   = newRect({ Rounding = 2, ZIndex = z + 13 })
+    e._d.saveBtn  = newRect({ Rounding = 5, ZIndex = z + 11 })
+    e._d.saveBtnO = newRect({ Filled = false, Rounding = 5, ZIndex = z + 11 })
     e._d.saveTxt  = newLabel({ Size = sz.fontXs, Center = true, ZIndex = z + 12 })
-    e._d.loadBtn  = newRect({ Rounding = 3, ZIndex = z + 11 })
-    e._d.loadBtnO = newRect({ Filled = false, Rounding = 3, ZIndex = z + 11 })
+    e._d.loadBtn  = newRect({ Rounding = 5, ZIndex = z + 11 })
+    e._d.loadBtnO = newRect({ Filled = false, Rounding = 5, ZIndex = z + 11 })
     e._d.loadTxt  = newLabel({ Size = sz.fontXs, Center = true, ZIndex = z + 12 })
 
     local function applyKey(kc)
@@ -1878,10 +1878,10 @@ function Window:AddTab(o)
         _elems = {}, _scroll = 0, _scrollV = 0, _win = self,
     }, Tab)
     local td = {
-        bg    = newRect({ Rounding = 3, ZIndex = 8 }),
+        bg    = newRect({ Rounding = 5, ZIndex = 8 }),
         icon  = newLabel({ Size = sz.fontSm, Center = true, ZIndex = 9 }),
         label = newLabel({ Size = sz.fontSm, ZIndex = 9 }),
-        bar   = newRect({ Rounding = 2, ZIndex = 9, Color = pal.accent }),
+        bar   = newRect({ Rounding = 4, ZIndex = 9, Color = pal.accent }),
         barA  = 0,
     }
     self._tabDraw[#self._tabDraw+1] = td
@@ -2054,7 +2054,7 @@ function bliss.new(opts)
         side       = newRect({ ZIndex = 3, Rounding = sz.round, Filled = true }),
         sideDiv    = newLine({ Color = pal.borderDim, ZIndex = 3 }),
         contentDiv = newLine({ Color = pal.borderDim, ZIndex = 3, Transparency = 0.5 }),
-        scroll     = newRect({ Color = pal.borderDim, Rounding = 2, ZIndex = 25 }),
+        scroll     = newRect({ Color = pal.borderDim, Rounding = 4, ZIndex = 25 }),
     }
 
     local win = setmetatable({
