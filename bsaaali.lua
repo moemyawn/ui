@@ -1,11 +1,40 @@
+Please fix this so:
+It only adds transparency to lower items if needed or just fix masking.
+
+Round all UI elements like the watermark and notifications,
+
+Improve anything to add more stability,
+
+Fix notifications not deleting when UI is destroyed
+
+Improve animations and add more modernism with more features,
+
+Fix the color slider not projecting multiple colors.
+
+Add hex picker/rbga values
+
+Add depth and a more creamy feel
+
+Add sounds
+sounds you can use:
+12222140 - UI Destroy/Remove
+7032267917 - ui loaded (after loading screen)
+136275224021234 - UI open/close/feedback (not toggle), tab switch,
+12222200 - toggle sound
+
+Add more client security for the UI
+
+Add theme support
+
+Add search system
+
+Codebase:
 local UIS = game:GetService("UserInputService")
 local RS = game:GetService("RunService")
 local GS = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local Stats = game:GetService("Stats")
 local HttpService = game:GetService("HttpService")
-local SoundService = game:GetService("SoundService")
-local Debris = game:GetService("Debris")
 
 -- ============================================================================
 -- executor api shims
@@ -141,34 +170,6 @@ bliss._themes = {}
 bliss._activeTheme = nil
 bliss._spacing = "default"
 bliss._watermark = nil
-
-
-local function colorToHex(c)
-    local r = math.floor(clamp(c.R, 0, 1) * 255 + 0.5)
-    local g = math.floor(clamp(c.G, 0, 1) * 255 + 0.5)
-    local b = math.floor(clamp(c.B, 0, 1) * 255 + 0.5)
-    return string.format("#%02X%02X%02X", r, g, b)
-end
-
-local function clearNotifs()
-    for _, n in ipairs(bliss._notifs or {}) do
-        if n and n._d then
-            for _, d in pairs(n._d) do kill(d) end
-        end
-    end
-    bliss._notifs = {}
-end
-
-bliss._sound = {
-    enabled = true,
-    volume = 0.35,
-    ids = {
-        destroy = "12222140",
-        loaded = "7032267917",
-        ui = "136275224021234",
-        toggle = "12222200",
-    }
-}
 
 local pal = {
     bg          = Color3.fromRGB(18, 17, 20),
@@ -338,8 +339,6 @@ local function newRoundRect(p)
     return proxy
 end
 
-
-
 local function newRect(p)
     -- use the fake-rounded path only when:
     --   - the executor's native Square doesn't honor Rounding
@@ -425,33 +424,6 @@ pcall(function()
     insetY = inset.Y or 0
 end)
 
--- =========================
--- PATCH 3: search + theme API
--- =========================
-
-local function elemSearchText(el)
-    if not el then return "" end
-    return string.lower(tostring(el.name or el.text or el.type or ""))
-end
-
-local function elemPassesSearch(win, el)
-    local q = (win and win._search) or ""
-    if q == "" then return true end
-    return string.find(elemSearchText(el), q, 1, true) ~= nil
-end
-
-function bliss:RegisterTheme(name, palette)
-    if type(name) ~= "string" or type(palette) ~= "table" then return end
-    self._themes[name] = palette
-end
-
-function bliss:GetThemes()
-    local out = {}
-    for k in pairs(self._themes) do out[#out+1] = k end
-    table.sort(out)
-    return out
-end
-
 -- ============================================================================
 -- shared key -> char mapping for textboxes
 -- ============================================================================
@@ -510,24 +482,6 @@ local function charFromKey(kc, shift)
 
     return nil
 end
-
-function bliss:PlaySound(key)
-    if not self._sound.enabled then return end
-    local id = self._sound.ids[key]
-    if not id then return end
-
-    local s = Instance.new("Sound")
-    s.SoundId = "rbxassetid://" .. id
-    s.Volume = self._sound.volume
-    s.PlayOnRemove = false
-    s.Parent = SoundService
-
-    pcall(function() SoundService:PlayLocalSound(s) end)
-    Debris:AddItem(s, 3)
-end
-
-function bliss:SetSoundEnabled(v) self._sound.enabled = not not v end
-function bliss:SetSoundVolume(v) self._sound.volume = clamp(tonumber(v) or 0.35, 0, 1) end
 
 -- ============================================================================
 -- tooltip
@@ -765,10 +719,6 @@ end
 -- ============================================================================
 -- notifications
 -- ============================================================================
--- =========================
--- PATCH 6: notification cleanup + rounded creamy feel + progress
--- replace mkNotif + updateNotifs
--- =========================
 local function mkNotif(opts)
     local n = {
         title   = opts.Title or "notification",
@@ -781,27 +731,26 @@ local function mkNotif(opts)
         _d      = {},
     }
     local z = 150
-    n._d.bg     = newRect({ Rounding = 10, ZIndex = z })
-    n._d.bgOut  = newRect({ Filled = false, Rounding = 10, ZIndex = z + 1 })
-    n._d.accent = newRect({ Rounding = 8, ZIndex = z + 2 })
-    n._d.title  = newLabel({ Size = sz.fontSm, ZIndex = z + 3 })
-    n._d.msg    = newLabel({ Size = sz.fontXs, ZIndex = z + 3 })
-    n._d.prog   = newRect({ Rounding = 6, ZIndex = z + 2 })
+    n._d.bg     = newRect({ Rounding = 6, ZIndex = z })
+    n._d.bgOut  = newRect({ Filled = false, Rounding = 6, ZIndex = z })
+    n._d.accent = newRect({ Rounding = 4, ZIndex = z + 1 })
+    n._d.title  = newLabel({ Size = sz.fontSm, ZIndex = z + 2 })
+    n._d.msg    = newLabel({ Size = sz.fontXs, ZIndex = z + 2 })
+    n._d.g1     = newRect({ Filled = false, Rounding = 8, ZIndex = z - 1 })
+    n._d.g2     = newRect({ Filled = false, Rounding = 11, ZIndex = z - 2 })
     return n
 end
 
 local function updateNotifs(dt, cam)
     local vp = cam.ViewportSize
-    local baseX = vp.X - 248
+    local baseX = vp.X - 230
     local baseY = vp.Y - 20
     local alive = {}
-
     for _, n in ipairs(bliss._notifs) do
         n._t = n._t + dt
         local tgt = (n._t < n.dur) and 1 or 0
-        n._a = lerp(n._a, tgt, n._t < n.dur and 0.2 or 0.12)
-
-        if n._a < 0.02 and n._t >= n.dur then
+        n._a = lerp(n._a, tgt, n._t < n.dur and 0.14 or 0.1)
+        if n._a < 0.01 and n._t >= n.dur then
             for _, d in pairs(n._d) do kill(d) end
             n._dead = true
         else
@@ -813,50 +762,49 @@ local function updateNotifs(dt, cam)
     local offsetY = 0
     for i = #alive, 1, -1 do
         local n = alive[i]
-        local nw, nh = 228, 54
-        local nx = baseX + (1 - n._a) * 26
+        local nw, nh = 210, 46
+        local nx = baseX + (1 - n._a) * 30
         local ny = baseY - offsetY - nh
         local col = n.kind == "good" and pal.good or (n.kind == "warn" and pal.warn or (n.kind == "bad" and pal.bad or pal.accent))
 
-        local tLeft = clamp(1 - (n._t / n.dur), 0, 1)
+        for _, d in pairs(n._d) do d.Visible = true; d.Transparency = n._a end
 
-        n._d.bg.Visible = true
-        n._d.bg.Position = Vector2.new(nx, ny)
-        n._d.bg.Size = Vector2.new(nw, nh)
-        n._d.bg.Color = lc(pal.panel, pal.panelLit, 0.25)
+        n._d.g2.Position = Vector2.new(nx - 7, ny - 7)
+        n._d.g2.Size     = Vector2.new(nw + 14, nh + 14)
+        n._d.g2.Color    = col; n._d.g2.Thickness = 1
+        n._d.g2.Transparency = n._a * 0.1
+
+        n._d.g1.Position = Vector2.new(nx - 3, ny - 3)
+        n._d.g1.Size     = Vector2.new(nw + 6, nh + 6)
+        n._d.g1.Color    = col; n._d.g1.Thickness = 1
+        n._d.g1.Transparency = n._a * 0.25
+
+        n._d.bg.Position    = Vector2.new(nx, ny)
+        n._d.bg.Size        = Vector2.new(nw, nh)
+        n._d.bg.Color       = pal.panel
         n._d.bg.Transparency = n._a
 
-        n._d.bgOut.Visible = true
-        n._d.bgOut.Position = Vector2.new(nx, ny)
-        n._d.bgOut.Size = Vector2.new(nw, nh)
-        n._d.bgOut.Color = lc(pal.border, col, 0.2)
+        n._d.bgOut.Position  = Vector2.new(nx, ny)
+        n._d.bgOut.Size      = Vector2.new(nw, nh)
+        n._d.bgOut.Color     = pal.border
         n._d.bgOut.Transparency = n._a
 
-        n._d.accent.Visible = true
-        n._d.accent.Position = Vector2.new(nx + 6, ny + 7)
-        n._d.accent.Size = Vector2.new(3, nh - 14)
-        n._d.accent.Color = col
+        n._d.accent.Position  = Vector2.new(nx, ny)
+        n._d.accent.Size      = Vector2.new(3, nh)
+        n._d.accent.Color     = col
         n._d.accent.Transparency = n._a
 
-        n._d.title.Visible = true
-        n._d.title.Text = n.title
-        n._d.title.Position = Vector2.new(nx + 14, ny + 9)
-        n._d.title.Color = pal.text
+        n._d.title.Text      = n.title
+        n._d.title.Position  = Vector2.new(nx + 10, ny + 7)
+        n._d.title.Color     = pal.text
         n._d.title.Transparency = n._a
 
-        n._d.msg.Visible = true
-        n._d.msg.Text = n.msg
-        n._d.msg.Position = Vector2.new(nx + 14, ny + 26)
-        n._d.msg.Color = pal.textSub
+        n._d.msg.Text        = n.msg
+        n._d.msg.Position    = Vector2.new(nx + 10, ny + 22)
+        n._d.msg.Color       = pal.textSub
         n._d.msg.Transparency = n._a
 
-        n._d.prog.Visible = true
-        n._d.prog.Position = Vector2.new(nx + 8, ny + nh - 8)
-        n._d.prog.Size = Vector2.new((nw - 16) * tLeft, 3)
-        n._d.prog.Color = col
-        n._d.prog.Transparency = n._a
-
-        offsetY = offsetY + nh + 8
+        offsetY = offsetY + nh + 6
     end
 end
 
@@ -1560,27 +1508,20 @@ local function mkTextbox(o, flags)
     return e
 end
 
--- =========================
--- PATCH 4: color picker replacement
--- fixes hue bar to project full spectrum, adds alpha + HEX/RGBA readout
--- replace mkColorPicker with this version
--- =========================
 local function mkColorPicker(o, flags)
     local e = {
         type = "color", name = o.Name or "color",
-        val = o.Default or Color3.new(1,1,1), alpha = tonumber(o.Alpha) or 1,
+        val = o.Default or Color3.new(1,1,1),
         cb = typeof(o.Callback) == "function" and o.Callback or function() end,
         flag = o.Flag, tooltip = o.Tooltip,
-        h = sz.elemH, _open = false, _dSV = false, _dH = false, _dA = false,
-        _hue = 0, _sat = 1, _bri = 1, _d = {}, _hSeg = {},
+        h = sz.elemH, _open = false, _dSV = false, _dH = false,
+        _hue = 0, _sat = 1, _bri = 1, _d = {},
     }
-
     do
         local r,g,b = e.val.R, e.val.G, e.val.B
         local hi,lo = math.max(r,g,b), math.min(r,g,b)
         local d = hi - lo
-        e._bri = hi
-        e._sat = hi == 0 and 0 or d/hi
+        e._bri = hi; e._sat = hi==0 and 0 or d/hi
         if d == 0 then e._hue = 0
         elseif hi == r then e._hue = ((g-b)/d)%6
         elseif hi == g then e._hue = (b-r)/d+2
@@ -1589,176 +1530,85 @@ local function mkColorPicker(o, flags)
     end
 
     e._d.label   = newLabel({ Size = sz.font, ZIndex = 30 })
-    e._d.prev    = newRect({ Rounding = 6, ZIndex = 28 })
-    e._d.prevOut = newRect({ Filled = false, Rounding = 6, ZIndex = 28 })
+    e._d.prev    = newRect({ Rounding = 5, ZIndex = 28 })
+    e._d.prevOut = newRect({ Filled = false, Rounding = 5, ZIndex = 28 })
+    e._d.panBg   = newRect({ Rounding = 6, ZIndex = 60 })
+    e._d.panOut  = newRect({ Filled = false, Rounding = 6, ZIndex = 60 })
+    e._d.svBox   = newRect({ Rounding = 4, ZIndex = 61 })
+    e._d.svDot   = newDot({ Filled = false, Radius = 4, Thickness = 2, ZIndex = 63 })
+    e._d.hBar    = newRect({ Rounding = 4, ZIndex = 61 })
+    e._d.hCur    = newRect({ Rounding = 4, ZIndex = 62 })
 
-    e._d.panBg   = newRect({ Rounding = 8, ZIndex = 60 })
-    e._d.panOut  = newRect({ Filled = false, Rounding = 8, ZIndex = 61 })
-
-    e._d.svBox   = newRect({ Rounding = 5, ZIndex = 62 })
-    e._d.svDot   = newDot({ Filled = false, Radius = 4, Thickness = 2, ZIndex = 64 })
-
-    e._d.hCur    = newRect({ Rounding = 3, ZIndex = 64 })
-
-    e._d.aTrack  = newRect({ Rounding = 3, ZIndex = 62 })
-    e._d.aFill   = newRect({ Rounding = 3, ZIndex = 63 })
-    e._d.aCur    = newRect({ Rounding = 3, ZIndex = 64 })
-
-    e._d.hexTxt  = newLabel({ Size = sz.fontXs, ZIndex = 64, Color = pal.text })
-    e._d.rgbaTxt = newLabel({ Size = sz.fontXs, ZIndex = 64, Color = pal.textDim })
-
-    for i = 1, 24 do
-        e._hSeg[i] = newRect({ Rounding = 2, ZIndex = 62 })
-    end
-
-    function e:set(v)
-        if typeof(v) == "Color3" then
-            self.val = v
-        elseif type(v) == "table" and typeof(v.Color) == "Color3" then
-            self.val = v.Color
-            self.alpha = clamp(tonumber(v.Alpha) or self.alpha, 0, 1)
-        end
-        safeCb(self.cb, self.val, self.alpha)
-        if self.flag and flags then
-            flags[self.flag] = { Color = self.val, Alpha = self.alpha }
-        end
-    end
+    function e:set(c) self.val = c; safeCb(self.cb, c); if self.flag and flags then flags[self.flag] = c end end
 
     function e:draw(px, py, w, vis)
         for _, d in pairs(self._d) do d.Visible = vis end
-        for _, d in ipairs(self._hSeg) do d.Visible = vis and self._open end
-        if not vis then return end
-
-        local cs = sz.colorBox + 2
+        if not vis then
+            self._d.panBg.Visible = false; self._d.panOut.Visible = false
+            self._d.svBox.Visible = false; self._d.svDot.Visible = false
+            self._d.hBar.Visible  = false; self._d.hCur.Visible = false
+            return
+        end
+        local cs = sz.colorBox
         local cx = px + w - cs - 10
         local cy = py + (sz.elemH - cs)/2
         local hov = hit(mx, my, cx, cy, cs, cs)
         if hov and mClick then self._open = not self._open end
 
-        self._d.label.Text = self.name
+        self._d.label.Text     = self.name
         self._d.label.Position = Vector2.new(px + 8, py + (sz.elemH - sz.font)/2 - 1)
-        self._d.label.Color = pal.textSub
+        self._d.label.Color    = pal.textSub
+        self._d.prev.Position  = Vector2.new(cx, cy); self._d.prev.Size = Vector2.new(cs, cs); self._d.prev.Color = self.val
+        self._d.prevOut.Position = Vector2.new(cx, cy); self._d.prevOut.Size = Vector2.new(cs, cs); self._d.prevOut.Color = pal.borderDim
 
-        self._d.prev.Position = Vector2.new(cx, cy)
-        self._d.prev.Size = Vector2.new(cs, cs)
-        self._d.prev.Color = self.val
-        self._d.prevOut.Position = Vector2.new(cx, cy)
-        self._d.prevOut.Size = Vector2.new(cs, cs)
-        self._d.prevOut.Color = pal.borderDim
+        local show = self._open
+        self._d.panBg.Visible = show; self._d.panOut.Visible = show
+        self._d.svBox.Visible = show; self._d.svDot.Visible = show
+        self._d.hBar.Visible  = show; self._d.hCur.Visible = show
 
-        if not self._open then return end
-
-        local pw, ph = 196, 146
-        local ppx = cx + cs - pw
-        local ppy = cy + cs + 6
-
-        self._d.panBg.Visible = true
-        self._d.panOut.Visible = true
-        self._d.panBg.Position = Vector2.new(ppx, ppy)
-        self._d.panBg.Size = Vector2.new(pw, ph)
-        self._d.panBg.Color = pal.bgDeep
-        self._d.panOut.Position = Vector2.new(ppx, ppy)
-        self._d.panOut.Size = Vector2.new(pw, ph)
-        self._d.panOut.Color = pal.border
-
-        local sx, sy = ppx + 8, ppy + 8
-        local sw, sh = 138, 88
-        self._d.svBox.Position = Vector2.new(sx, sy)
-        self._d.svBox.Size = Vector2.new(sw, sh)
-        self._d.svBox.Color = Color3.fromHSV(self._hue, 1, 1)
-
-        if hit(mx, my, sx, sy, sw, sh) and mClick then self._dSV = true end
-        if not mDown then self._dSV = false end
-        if self._dSV then
-            self._sat = clamp((mx - sx)/sw, 0, 1)
-            self._bri = 1 - clamp((my - sy)/sh, 0, 1)
+        if show then
+            local pw, ph = 160, 120
+            local ppx = cx + cs - pw
+            local ppy = cy + cs + 4
+            self._d.panBg.Position = Vector2.new(ppx, ppy); self._d.panBg.Size = Vector2.new(pw, ph); self._d.panBg.Color = pal.bgDeep
+            self._d.panOut.Position = Vector2.new(ppx, ppy); self._d.panOut.Size = Vector2.new(pw, ph); self._d.panOut.Color = pal.border
+            local sx, sy = ppx + 6, ppy + 6
+            local sw, sh = pw - 26, ph - 12
+            self._d.svBox.Position = Vector2.new(sx, sy); self._d.svBox.Size = Vector2.new(sw, sh)
+            self._d.svBox.Color    = Color3.fromHSV(self._hue, 1, 1)
+            if hit(mx, my, sx, sy, sw, sh) and mClick then self._dSV = true end
+            if not mDown then self._dSV = false end
+            if self._dSV then
+                self._sat = clamp((mx - sx)/sw, 0, 1)
+                self._bri = 1 - clamp((my - sy)/sh, 0, 1)
+                self.val = Color3.fromHSV(self._hue, self._sat, self._bri)
+                safeCb(self.cb, self.val); if self.flag and flags then flags[self.flag] = self.val end
+            end
+            self._d.svDot.Position = Vector2.new(sx + self._sat*sw, sy + (1-self._bri)*sh)
+            self._d.svDot.Color    = pal.text
+            local hx, hy = ppx + pw - 16, ppy + 6
+            local hh = ph - 12
+            self._d.hBar.Position = Vector2.new(hx, hy); self._d.hBar.Size = Vector2.new(8, hh)
+            self._d.hBar.Color    = Color3.fromHSV(self._hue, 1, 1)
+            if hit(mx, my, hx, hy, 8, hh) and mClick then self._dH = true end
+            if not mDown then self._dH = false end
+            if self._dH then
+                self._hue = clamp((my - hy)/hh, 0, 0.999)
+                self.val = Color3.fromHSV(self._hue, self._sat, self._bri)
+                safeCb(self.cb, self.val); if self.flag and flags then flags[self.flag] = self.val end
+            end
+            self._d.hCur.Position = Vector2.new(hx - 1, hy + self._hue*hh - 2)
+            self._d.hCur.Size     = Vector2.new(10, 4); self._d.hCur.Color = pal.text
+            if mClick and not hit(mx, my, ppx, ppy, pw, ph) and not hov and not self._dSV and not self._dH then
+                self._open = false
+            end
         end
-        self.val = Color3.fromHSV(self._hue, self._sat, self._bri)
-
-        self._d.svDot.Position = Vector2.new(sx + self._sat*sw, sy + (1-self._bri)*sh)
-        self._d.svDot.Color = pal.text
-
-        local hx, hy = sx + sw + 10, sy
-        local hw, hh = 12, sh
-        local segH = hh / #self._hSeg
-        for i = 1, #self._hSeg do
-            local y = hy + (i-1) * segH
-            local h = math.ceil(segH + 1)
-            self._hSeg[i].Visible = true
-            self._hSeg[i].Position = Vector2.new(hx, y)
-            self._hSeg[i].Size = Vector2.new(hw, h)
-            self._hSeg[i].Color = Color3.fromHSV((i-1)/(#self._hSeg-1), 1, 1)
-        end
-
-        if hit(mx, my, hx, hy, hw, hh) and mClick then self._dH = true end
-        if not mDown then self._dH = false end
-        if self._dH then
-            self._hue = clamp((my - hy)/hh, 0, 0.999)
-            self.val = Color3.fromHSV(self._hue, self._sat, self._bri)
-        end
-
-        self._d.hCur.Visible = true
-        self._d.hCur.Position = Vector2.new(hx - 2, hy + self._hue*hh - 2)
-        self._d.hCur.Size = Vector2.new(hw + 4, 4)
-        self._d.hCur.Color = pal.text
-
-        local ax, ay = sx, sy + sh + 12
-        local aw, ah = pw - 16, 8
-        self._d.aTrack.Visible = true
-        self._d.aTrack.Position = Vector2.new(ax, ay)
-        self._d.aTrack.Size = Vector2.new(aw, ah)
-        self._d.aTrack.Color = pal.borderDim
-
-        self._d.aFill.Visible = true
-        self._d.aFill.Position = Vector2.new(ax, ay)
-        self._d.aFill.Size = Vector2.new(math.max(2, aw * self.alpha), ah)
-        self._d.aFill.Color = self.val
-
-        if hit(mx, my, ax, ay - 4, aw, ah + 8) and mClick then self._dA = true end
-        if not mDown then self._dA = false end
-        if self._dA then
-            self.alpha = clamp((mx - ax)/aw, 0, 1)
-        end
-
-        self._d.aCur.Visible = true
-        self._d.aCur.Position = Vector2.new(ax + aw*self.alpha - 2, ay - 1)
-        self._d.aCur.Size = Vector2.new(4, ah + 2)
-        self._d.aCur.Color = pal.text
-
-        local rr = math.floor(self.val.R * 255 + 0.5)
-        local gg = math.floor(self.val.G * 255 + 0.5)
-        local bb = math.floor(self.val.B * 255 + 0.5)
-        local aa = math.floor(self.alpha * 255 + 0.5)
-
-        self._d.hexTxt.Visible = true
-        self._d.hexTxt.Text = "HEX  " .. colorToHex(self.val)
-        self._d.hexTxt.Position = Vector2.new(sx, ay + 14)
-
-        self._d.rgbaTxt.Visible = true
-        self._d.rgbaTxt.Text = string.format("RGBA %d, %d, %d, %d", rr, gg, bb, aa)
-        self._d.rgbaTxt.Position = Vector2.new(sx, ay + 28)
-
-        safeCb(self.cb, self.val, self.alpha)
-        if self.flag and flags then
-            flags[self.flag] = { Color = self.val, Alpha = self.alpha }
-        end
-
-        if mClick and not hit(mx, my, ppx, ppy, pw, ph) and not hov and not self._dSV and not self._dH and not self._dA then
-            self._open = false
-        end
-
         if hov and self.tooltip then
-            bliss._tooltipText = self.tooltip
-            bliss._tooltipMx = mx
-            bliss._tooltipMy = my
+            bliss._tooltipText = self.tooltip; bliss._tooltipMx = mx; bliss._tooltipMy = my
         end
     end
 
-    function e:destroy()
-        for _, d in pairs(self._d) do kill(d) end
-        for _, d in ipairs(self._hSeg) do kill(d) end
-    end
-
+    function e:destroy() for _, d in pairs(self._d) do kill(d) end end
     return e
 end
 
@@ -2168,17 +2018,28 @@ local function renderWin(w, dt)
         at._scroll = clamp(at._scroll, 0, math.max(0, totalH - ch + 14))
 
         local ey = cy + sz.pad - at._scroll
+        local fadeStart = cy + ch * 0.55
+        local fadeEnd   = cy + ch
         for _, el in ipairs(at._elems) do
-            local shouldDraw = elemPassesSearch(w, el)
-            local eTop, eBot = ey, ey + el.h
-            local eVis = alpha > 0.05 and shouldDraw and (eBot > cy) and (eTop < cy + ch)
-        
+            local eTop = ey
+            local eBot = ey + el.h
+            local eVis = alpha > 0.05 and (eBot > cy) and (eTop < cy + ch)
+            local elemAlpha = 1
+            if eVis and eBot > fadeStart then
+                local frac = clamp((eTop - fadeStart) / (fadeEnd - fadeStart), 0, 1)
+                elemAlpha = 1 - frac
+                if elemAlpha < 0.04 then eVis = false end
+            end
             if eVis then
                 el:draw(cx + 4, ey, cw - 12, true, dt)
+                if elemAlpha < 0.99 then
+                    for _, obj in pairs(el._d or {}) do
+                        pcall(function() obj.Transparency = math.min(obj.Transparency or 1, elemAlpha) end)
+                    end
+                end
             else
                 el:draw(cx + 4, ey, cw - 12, false, dt)
             end
-        
             ey = ey + el.h + sz.elemGap
         end
 
@@ -2318,67 +2179,27 @@ function bliss:FinishLoading()
     end
 end
 
--- =========================
--- PATCH 8: destroy stability fixes
--- replace Destroy/DestroyAll with this cleanup behavior
--- =========================
 function bliss:Destroy(name)
     local w = self._windows[name]
     if not w then return end
-
     for _, tab in ipairs(w._tabs) do
-        for _, el in ipairs(tab._elems) do
-            if el.destroy then pcall(function() el:destroy() end) end
-        end
+        for _, el in ipairs(tab._elems) do if el.destroy then pcall(function() el:destroy() end) end end
     end
-
     for _, d in pairs(w._draw) do kill(d) end
-    for _, td in ipairs(w._tabDraw) do
-        for _, d in pairs(td) do
-            if type(d) ~= "number" then kill(d) end
-        end
-    end
+    for _, td in ipairs(w._tabDraw) do for k, d in pairs(td) do if type(d) ~= "number" then kill(d) end end end
     for _, g in pairs(w._glow) do
         kill(g.g1); kill(g.g2); kill(g.g3); kill(g.g4); kill(g.g5)
     end
-
     self._windows[name] = nil
-
-    -- if no windows left, also clean global overlays related to ui
-    local any = false
-    for _ in pairs(self._windows) do any = true break end
-    if not any then
-        clearNotifs()
-        if self._watermark then
-            for _, d in pairs(self._watermark._d) do kill(d) end
-            self._watermark = nil
-        end
-    end
 end
 
 function bliss:DestroyAll()
     for name in pairs(self._windows) do self:Destroy(name) end
-    clearNotifs()
-
-    for _, c in ipairs(self._connections) do
-        pcall(function() c:Disconnect() end)
-    end
+    for _, c in ipairs(self._connections) do pcall(function() c:Disconnect() end) end
     self._connections = {}
-
-    if _tooltipDraw then
-        for _, d in pairs(_tooltipDraw) do kill(d) end
-        _tooltipDraw = nil
-    end
-    if _loadScreen then
-        for _, d in pairs(_loadScreen) do kill(d) end
-        _loadScreen = nil
-    end
-    if self._watermark then
-        for _, d in pairs(self._watermark._d) do kill(d) end
-        self._watermark = nil
-    end
-
-    self:PlaySound("destroy")
+    if _tooltipDraw then for _, d in pairs(_tooltipDraw) do kill(d) end; _tooltipDraw = nil end
+    if _loadScreen then for _, d in pairs(_loadScreen) do kill(d) end; _loadScreen = nil end
+    if self._watermark then for _, d in pairs(self._watermark._d) do kill(d) end; self._watermark = nil end
 end
 
 table.insert(bliss._connections, UIS.InputChanged:Connect(function(io)
