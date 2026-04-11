@@ -428,9 +428,6 @@ end)
 -- =========================
 -- PATCH 3: search + theme API
 -- =========================
-function Window:SetSearch(q)
-    self._search = string.lower(tostring(q or ""))
-end
 
 local function elemSearchText(el)
     if not el then return "" end
