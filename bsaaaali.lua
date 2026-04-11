@@ -1,34 +1,3 @@
-Please fix this so:
-It only adds transparency to lower items if needed or just fix masking.
-
-Round all UI elements like the watermark and notifications,
-
-Improve anything to add more stability,
-
-Fix notifications not deleting when UI is destroyed
-
-Improve animations and add more modernism with more features,
-
-Fix the color slider not projecting multiple colors.
-
-Add hex picker/rbga values
-
-Add depth and a more creamy feel
-
-Add sounds
-sounds you can use:
-12222140 - UI Destroy/Remove
-7032267917 - ui loaded (after loading screen)
-136275224021234 - UI open/close/feedback (not toggle), tab switch,
-12222200 - toggle sound
-
-Add more client security for the UI
-
-Add theme support
-
-Add search system
-
-Codebase:
 local UIS = game:GetService("UserInputService")
 local RS = game:GetService("RunService")
 local GS = game:GetService("GuiService")
