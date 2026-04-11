@@ -425,6 +425,36 @@ pcall(function()
     insetY = inset.Y or 0
 end)
 
+-- =========================
+-- PATCH 3: search + theme API
+-- =========================
+function Window:SetSearch(q)
+    self._search = string.lower(tostring(q or ""))
+end
+
+local function elemSearchText(el)
+    if not el then return "" end
+    return string.lower(tostring(el.name or el.text or el.type or ""))
+end
+
+local function elemPassesSearch(win, el)
+    local q = (win and win._search) or ""
+    if q == "" then return true end
+    return string.find(elemSearchText(el), q, 1, true) ~= nil
+end
+
+function bliss:RegisterTheme(name, palette)
+    if type(name) ~= "string" or type(palette) ~= "table" then return end
+    self._themes[name] = palette
+end
+
+function bliss:GetThemes()
+    local out = {}
+    for k in pairs(self._themes) do out[#out+1] = k end
+    table.sort(out)
+    return out
+end
+
 -- ============================================================================
 -- shared key -> char mapping for textboxes
 -- ============================================================================
@@ -2141,28 +2171,17 @@ local function renderWin(w, dt)
         at._scroll = clamp(at._scroll, 0, math.max(0, totalH - ch + 14))
 
         local ey = cy + sz.pad - at._scroll
-        local fadeStart = cy + ch * 0.55
-        local fadeEnd   = cy + ch
         for _, el in ipairs(at._elems) do
-            local eTop = ey
-            local eBot = ey + el.h
-            local eVis = alpha > 0.05 and (eBot > cy) and (eTop < cy + ch)
-            local elemAlpha = 1
-            if eVis and eBot > fadeStart then
-                local frac = clamp((eTop - fadeStart) / (fadeEnd - fadeStart), 0, 1)
-                elemAlpha = 1 - frac
-                if elemAlpha < 0.04 then eVis = false end
-            end
+            local shouldDraw = elemPassesSearch(w, el)
+            local eTop, eBot = ey, ey + el.h
+            local eVis = alpha > 0.05 and shouldDraw and (eBot > cy) and (eTop < cy + ch)
+        
             if eVis then
                 el:draw(cx + 4, ey, cw - 12, true, dt)
-                if elemAlpha < 0.99 then
-                    for _, obj in pairs(el._d or {}) do
-                        pcall(function() obj.Transparency = math.min(obj.Transparency or 1, elemAlpha) end)
-                    end
-                end
             else
                 el:draw(cx + 4, ey, cw - 12, false, dt)
             end
+        
             ey = ey + el.h + sz.elemGap
         end
 
@@ -2302,27 +2321,67 @@ function bliss:FinishLoading()
     end
 end
 
+-- =========================
+-- PATCH 8: destroy stability fixes
+-- replace Destroy/DestroyAll with this cleanup behavior
+-- =========================
 function bliss:Destroy(name)
     local w = self._windows[name]
     if not w then return end
+
     for _, tab in ipairs(w._tabs) do
-        for _, el in ipairs(tab._elems) do if el.destroy then pcall(function() el:destroy() end) end end
+        for _, el in ipairs(tab._elems) do
+            if el.destroy then pcall(function() el:destroy() end) end
+        end
     end
+
     for _, d in pairs(w._draw) do kill(d) end
-    for _, td in ipairs(w._tabDraw) do for k, d in pairs(td) do if type(d) ~= "number" then kill(d) end end end
+    for _, td in ipairs(w._tabDraw) do
+        for _, d in pairs(td) do
+            if type(d) ~= "number" then kill(d) end
+        end
+    end
     for _, g in pairs(w._glow) do
         kill(g.g1); kill(g.g2); kill(g.g3); kill(g.g4); kill(g.g5)
     end
+
     self._windows[name] = nil
+
+    -- if no windows left, also clean global overlays related to ui
+    local any = false
+    for _ in pairs(self._windows) do any = true break end
+    if not any then
+        clearNotifs()
+        if self._watermark then
+            for _, d in pairs(self._watermark._d) do kill(d) end
+            self._watermark = nil
+        end
+    end
 end
 
 function bliss:DestroyAll()
     for name in pairs(self._windows) do self:Destroy(name) end
-    for _, c in ipairs(self._connections) do pcall(function() c:Disconnect() end) end
+    clearNotifs()
+
+    for _, c in ipairs(self._connections) do
+        pcall(function() c:Disconnect() end)
+    end
     self._connections = {}
-    if _tooltipDraw then for _, d in pairs(_tooltipDraw) do kill(d) end; _tooltipDraw = nil end
-    if _loadScreen then for _, d in pairs(_loadScreen) do kill(d) end; _loadScreen = nil end
-    if self._watermark then for _, d in pairs(self._watermark._d) do kill(d) end; self._watermark = nil end
+
+    if _tooltipDraw then
+        for _, d in pairs(_tooltipDraw) do kill(d) end
+        _tooltipDraw = nil
+    end
+    if _loadScreen then
+        for _, d in pairs(_loadScreen) do kill(d) end
+        _loadScreen = nil
+    end
+    if self._watermark then
+        for _, d in pairs(self._watermark._d) do kill(d) end
+        self._watermark = nil
+    end
+
+    self:PlaySound("destroy")
 end
 
 table.insert(bliss._connections, UIS.InputChanged:Connect(function(io)
