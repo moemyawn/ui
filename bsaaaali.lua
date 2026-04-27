@@ -200,7 +200,7 @@ end
 
 local function applyCommon(d, p, defaults)
     setProp(d, "Visible", p.Visible or false)
-    setProp(d, "Transparency", (p.Transparency ~= nil) and p.Transparency or 1)
+    setProp(d, "Transparency", (p.Transparency ~= nil) and p.Transparency or 0)
     setProp(d, "ZIndex", p.ZIndex or defaults.ZIndex)
 end
 
@@ -214,7 +214,7 @@ local function newRoundRect(p)
         z      = p.ZIndex or 1,
         col    = p.Color or pal.bg,
         vis    = p.Visible or false,
-        trans  = (p.Transparency ~= nil) and p.Transparency or 1,
+        trans  = (p.Transparency ~= nil) and p.Transparency or 0,
         pos    = p.Position or Vector2.new(0, 0),
         size   = p.Size or Vector2.new(10, 10),
         thick  = p.Thickness or 1,
@@ -2195,11 +2195,15 @@ table.insert(bliss._connections, UIS.InputEnded:Connect(function(io)
 end))
 
 local _lastT = tick()
+local _lastDrawT = 0
 table.insert(bliss._connections, RS.RenderStepped:Connect(function()
     local ok, err = pcall(function()
         local now = tick()
         local dt  = math.min(now - _lastT, 0.1)
         _lastT    = now
+
+        if (now - _lastDrawT) < 0.05 then return end
+        _lastDrawT = now
 
         local ml = UIS:GetMouseLocation()
         mx, my = ml.X, ml.Y - insetY
