@@ -352,8 +352,8 @@ function Library:CreateWindow(cfg)
 		accentLine.BackgroundColor3 = newColor
 		sideScroll.ScrollBarImageColor3 = newColor
 		-- update active tab indicator & title
-		if self._activeTabBtn then
-			self._activeTabBtn._indicator.BackgroundColor3 = newColor
+		if self._activeTab then
+			self._activeTab._indicator.BackgroundColor3 = newColor
 		end
 		-- update title
 		titleLabel.Text = " " .. self.Title
@@ -437,7 +437,6 @@ function Library:CreateTab(name, icon)
 		ZIndex = 5,
 	}, btn)
 	makeInstance("UICorner", { CornerRadius = UDim.new(0, 2) }, indicator)
-	btn._indicator = indicator
 
 	-- Icon (if provided)
 	local xOff = 10
@@ -463,13 +462,14 @@ function Library:CreateTab(name, icon)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		ZIndex = 5,
 	}, btn)
-	btn._label = btnLabel
 
 	local tab = {
-		_page = page,
-		_btn  = btn,
-		_library = self,
-		_sections = {},
+		_page      = page,
+		_btn       = btn,
+		_indicator = indicator,
+		_label     = btnLabel,
+		_library   = self,
+		_sections  = {},
 	}
 
 	btn.MouseEnter:Connect(function()
@@ -500,19 +500,18 @@ function Library:_selectTab(tab)
 	-- deselect old
 	if self._activeTab then
 		local old = self._activeTab
-		old._btn._indicator.Visible = false
-		tween(old._btn._label, FAST, { TextColor3 = PALETTE.textDim })
+		old._indicator.Visible = false
+		tween(old._label, FAST, { TextColor3 = PALETTE.textDim })
 		tween(old._btn, FAST, { BackgroundColor3 = PALETTE.element })
 		old._page.Visible = false
 	end
 
-	self._activeTab    = tab
-	self._activeTabBtn = tab._btn
+	self._activeTab = tab
 
 	tab._page.Visible = true
-	tab._btn._indicator.Visible = true
-	tab._btn._indicator.BackgroundColor3 = self._accentColor
-	tween(tab._btn._label, FAST, { TextColor3 = PALETTE.text })
+	tab._indicator.Visible = true
+	tab._indicator.BackgroundColor3 = self._accentColor
+	tween(tab._label, FAST, { TextColor3 = PALETTE.text })
 	tween(tab._btn, FAST, { BackgroundColor3 = PALETTE.elementHov })
 end
 
