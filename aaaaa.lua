@@ -212,19 +212,70 @@ function Library:CreateWindow(cfg)
 	}, titleBar)
 	self._accentLine = accentLine
 
-	-- Title text
+	-- Title text (prefix: "sippin.")
 	local titleLabel = makeInstance("TextLabel", {
 		Text = " " .. self.Title,
 		TextSize = 14,
 		Font = Enum.Font.GothamBold,
 		TextColor3 = PALETTE.text,
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -60, 1, 0),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.new(0, 0, 1, 0),
 		Position = UDim2.new(0, 8, 0, 0),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		ZIndex = 4,
 	}, titleBar)
 	self._titleLabel = titleLabel
+
+	-- Suffix label: animated theme name in accent color
+	local suffixLabel = makeInstance("TextLabel", {
+		Text = self.Theme,
+		TextSize = 14,
+		Font = Enum.Font.GothamBold,
+		TextColor3 = self._accentColor,
+		BackgroundTransparency = 1,
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.new(0, 0, 1, 0),
+		Position = UDim2.new(0, 0, 0, 0), -- updated each frame
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 4,
+	}, titleBar)
+	self._suffixLabel = suffixLabel
+
+	-- Typewriter animation state
+	self._shownTheme = self.Theme
+	self._animating  = false
+	self._animId     = 0
+
+	task.spawn(function()
+		while titleLabel.Parent do
+			local targetTheme = self.Theme
+			if targetTheme ~= self._shownTheme and not self._animating then
+				self._animating = true
+				self._animId   += 1
+				local thisAnim  = self._animId
+				local oldTheme  = self._shownTheme
+				self._shownTheme = targetTheme
+
+				for i = #oldTheme, 0, -1 do
+					if self._animId ~= thisAnim then break end
+					suffixLabel.Text = oldTheme:sub(1, i)
+					task.wait(0.03)
+				end
+
+				task.wait(0.04)
+
+				for i = 1, #self._shownTheme do
+					if self._animId ~= thisAnim then break end
+					suffixLabel.Text = self._shownTheme:sub(1, i)
+					task.wait(0.03)
+				end
+
+				self._animating = false
+			end
+			task.wait(0.05)
+		end
+	end)
 
 	-- Close button
 	local closeBtn = makeInstance("TextButton", {
@@ -351,12 +402,17 @@ function Library:CreateWindow(cfg)
 		self._accentColor = newColor
 		accentLine.BackgroundColor3 = newColor
 		sideScroll.ScrollBarImageColor3 = newColor
-		-- update active tab indicator & title
+		-- update active tab indicator
 		if self._activeTab then
 			self._activeTab._indicator.BackgroundColor3 = newColor
 		end
-		-- update title
-		titleLabel.Text = " " .. self.Title
+		-- keep suffix color in sync with accent
+		self._suffixLabel.TextColor3 = newColor
+		-- keep suffix positioned flush after prefix
+		self._suffixLabel.Position = UDim2.new(
+			0, titleLabel.AbsolutePosition.X - titleBar.AbsolutePosition.X + titleLabel.AbsoluteSize.X,
+			0, 0
+		)
 	end)
 
 	return self
